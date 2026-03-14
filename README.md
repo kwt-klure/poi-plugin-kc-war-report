@@ -4,6 +4,8 @@ Standalone Poi plugin that turns KanColle sortie sessions and practices into a f
 
 Poi plugin that turns a finished sortie into a shameless `大本営` bulletin, a cold internal `戦闘詳報抄`, or a short official notice.
 
+![KC War Report GUI](assets/gui-overview.png)
+
 ## Example output
 
 One sortie, three document identities:
