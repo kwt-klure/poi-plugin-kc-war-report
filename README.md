@@ -2,13 +2,29 @@
 
 Standalone Poi plugin that turns KanColle sortie sessions and practices into a full Japanese war bulletin in a `大本営海軍報道部発表` style.
 
+艦これの出撃や演習を、`大本営海軍報道部発表` 風の戦報へ変換する Poi plugin です。
+
 Poi plugin that turns a finished sortie into a shameless `大本営` bulletin, a cold internal `戦闘詳報抄`, or a short official notice.
 
 ![KC War Report GUI](assets/gui-overview.png)
 
-## Example output
+## What it does / これは何か
+
+- `標準公報`
+  - A shameless public bulletin in a Daihonei tone.
+  - 大本営の対外発表らしく、堂々と大げさに書くモードです。
+- `硬派詳報`
+  - A cold internal after-action document.
+  - 冷たく硬い内部文書として書くモードです。
+- `短報`
+  - A short, complete official notice that is easy to share.
+  - 短くても公告らしい形を保った、共有しやすいモードです。
+
+## Example output / 出力例
 
 One sortie, three document identities:
+
+同じ sortie を、三種類の文書として書き分けます。
 
 ### `標準公報`
 
@@ -66,9 +82,11 @@ One sortie, three document identities:
 殊ニ「ヴェールヌイ」奮戦顕著ナリ。
 ```
 
-## Quick install
+## Quick install / クイックインストール
 
 For macOS + Poi, the fastest install path is:
+
+macOS + Poi なら、いちばん簡単な導入方法はこれです。
 
 ```bash
 npm install 'git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git' --prefix "$HOME/Library/Application Support/poi/plugins"
@@ -76,21 +94,30 @@ npm install 'git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git' --pr
 
 Then:
 
-1. Restart Poi, or reload the plugin list.
-2. Open the plugin panel and enable `KC War Report`.
-3. Run a sortie or practice battle, then open the plugin tab.
+その後:
 
-## Update
+1. Restart Poi, or reload the plugin list.
+   Poi を再起動するか、plugin list を再読込します。
+2. Open the plugin panel and enable `KC War Report`.
+   plugin panel で `KC War Report` を有効化します。
+3. Run a sortie or practice battle, then open the plugin tab.
+   出撃または演習を一度行い、plugin tab を開きます。
+
+## Update / 更新
 
 Run the same command again to pull the latest version:
+
+最新版へ更新する時も、同じコマンドをもう一度実行すれば大丈夫です。
 
 ```bash
 npm install 'git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git' --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
-## Install from source
+## Install from source / ソースから導入
 
 If you want to build from a local checkout instead:
+
+手元で clone してから build したい場合はこちらです。
 
 ```bash
 git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
@@ -100,23 +127,33 @@ npm pack --pack-destination dist
 npm install "./dist/poi-plugin-kc-war-report-0.4.6.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
-## Scope
+## Scope / できること
 
 - Reads sortie sessions from departure to return, plus single practice battles
+- 出港から帰投までの sortie と、単発の演習を読み取ります
 - Generates a short `海軍省提供` bulletin and a longer report body
+- `海軍省提供` の短報と、より長い本文を生成します
 - Includes three render modes: `標準公報`, `硬派詳報`, and `短報`
+- `標準公報`、`硬派詳報`、`短報` の三つの mode を切り替えられます
 - Supports copying the generated report and exporting it as a `.txt` file
+- 生成した戦報をコピーしたり `.txt` として出力できます
 - Does not use LLMs or external APIs
+- LLM や外部 API は使いません
 - Persists recent reports locally across Poi restarts
+- 最近の戦報履歴をローカルに保持します
 
-## Limits
+## Limits / 制限
 
 - The report is template-based and intentionally conservative
+- 戦報はテンプレート生成で、意図的に保守的な作りです
 - Damage wording is derived from the latest available fleet HP snapshot and may fall back to broad phrasing
+- 損害表現は取得できた最新 HP を基準にしており、場合によっては広めの表現になります
 - Sorties are summarized as one overall report rather than a per-node narrative
+- sortie は node ごとの実況ではなく、一篇の要約戦報としてまとめます
 - macOS + Poi is the primary tested install path right now
+- 現時点では macOS + Poi を主な動作確認環境としています
 
-## Validation
+## Validation / 検証
 
 ```bash
 npm install
