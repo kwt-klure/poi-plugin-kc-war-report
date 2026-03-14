@@ -1,0 +1,78 @@
+{
+  "name": "poi-plugin-kc-war-report",
+  "version": "0.4.6",
+  "private": false,
+  "description": "Poi plugin for turning KanColle sortie sessions and practices into a Japanese naval war bulletin",
+  "license": "MIT",
+  "author": {
+    "name": "kwt-klure"
+  },
+  "keywords": [
+    "poi",
+    "plugin",
+    "kancolle",
+    "battle",
+    "report",
+    "war-report"
+  ],
+  "files": [
+    "src/App.tsx",
+    "src/Settings.tsx",
+    "src/index.ts",
+    "src/export.ts",
+    "src/battle",
+    "src/report",
+    "src/poi",
+    "i18n",
+    "package.json",
+    "README.md"
+  ],
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "npm run typeCheck",
+    "test": "jest",
+    "typeCheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@blueprintjs/core": "^5.7.2",
+    "@blueprintjs/icons": "^5.7.2",
+    "i18next": "^19.8.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-i18next": "^11.8.5",
+    "styled-components": "^6.1.13",
+    "stylis": "^4.3.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.12.10",
+    "@babel/preset-env": "^7.23.2",
+    "@babel/preset-react": "^7.22.15",
+    "@babel/preset-typescript": "^7.23.2",
+    "@types/jest": "^29.5.12",
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.9.3"
+  },
+  "poiPlugin": {
+    "title": "KC War Report",
+    "description": "Generate a Japanese naval war bulletin from sortie sessions and practices",
+    "icon": "fa/file-text-o",
+    "i18nDir": "./i18n",
+    "priority": 2,
+    "apiVer": {}
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kwt-klure/poi-plugin-kc-war-report.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kwt-klure/poi-plugin-kc-war-report/issues"
+  },
+  "homepage": "https://github.com/kwt-klure/poi-plugin-kc-war-report#readme",
+  "packageManager": "npm@11.6.0"
+}

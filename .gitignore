@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.npm-cache/
+.DS_Store
+docs/equipment-export-handoff.md
+docs/work-log.md
