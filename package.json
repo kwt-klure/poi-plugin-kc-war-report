@@ -1,6 +1,6 @@
 {
   "name": "poi-plugin-kc-war-report",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "private": false,
   "description": "Poi plugin for turning KanColle sortie sessions and practices into a Japanese naval war bulletin",
   "license": "MIT",
@@ -17,6 +17,7 @@
   ],
   "files": [
     "src/App.tsx",
+    "src/SandboxPanel.tsx",
     "src/Settings.tsx",
     "src/index.ts",
     "src/export.ts",

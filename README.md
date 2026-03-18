@@ -1,181 +1,129 @@
 # KC War Report
 
-Poi plugin that turns KanColle sortie sessions and practices into three different Japanese document personas:
+Poi plugin for turning KanColle sortie results into IJN-flavored documents, bulletins, and local pseudo reports.
 
-- a shameless `大本営海軍部発表` style public bulletin
-- a truth-first `戦闘詳報` style internal report
-- a short official-looking notice
-
-艦これの sortie / 演習結果を、三種類の日本語文書へ変換する Poi plugin です。
-
-- 恥知らずなくらい大本営っぽい `標準公報`
-- なるべく事実だけを書く `硬派詳報`
-- 逐号速報ふうに共有しやすい `短報`
-
-This project is **for fun**.
-It is not trying to become a full battle analyzer, a replay viewer, or a historical simulator.
-It is a local writing engine that takes the facts the plugin actually knows and reframes them into different wartime document voices.
-
-この project は **for fun** です。
-完全な battle analyzer や replay viewer、史実再現 simulator を目指しているわけではありません。
-plugin が実際に取れた事実を、別の戦時文書人格で書き換えるローカル文体 engine です。
-
-## Core Principle / 大原則
-
-Because this plugin is **for fun**, the writing should feel closer to something IJN documents might plausibly say than to raw KanColle UI wording.
-
-That means:
-
-- keep game data internally when it is useful for logic
-- but prefer IJN-flavored phrasing in the user-facing text whenever possible
-- avoid leaking game UI labels like raw `S / A / B` rank wording into `硬派詳報`
-- when the plugin does not know enough to write something in a historically flavored way, say `未詳` / `細目未詳` instead of inventing detail
-
-この plugin は **for fun** だからこそ、出力文は「艦これの UI をそのまま言い換えたもの」よりも、「IJN の文書がそれっぽく書きそうな字面」に寄せるのを優先します。
-
-つまり、
-
-- 内部では game data を保持してよい
-- ただし user-facing text はできるだけ IJN 風の言い回しを優先する
-- `硬派詳報` に `S / A / B` のような game UI ラベルをそのまま漏らさない
-- 史実風に安全に書けない detail は、作らずに `未詳` / `細目未詳` と書く
-
-This is the tie-break rule for future changes.
-If a choice must be made between "gamey but explicit" and "more IJN-like and still honest," prefer the latter.
-
-今後の変更で迷った時は、この原則を優先します。
-「ゲームっぽいけれど露骨」か「もう少し IJN っぽく、かつ嘘をつかない」かで迷ったら、後者を取ります。
+這是一個給 Poi 用的 `for fun` plugin。
+它不打算幫玩家「更有效率地玩艦娘」，而是把艦娘的戰鬥結果、海域印象、與假想情境，轉寫成比較像 IJN 文書會長出的字。
 
 ![KC War Report GUI](assets/gui-overview.png)
 
-## What It Really Does / 本当は何をする plugin か
+## What This Project Is
 
-The plugin captures:
+This project is best understood as a **local writing / intelligence / propaganda sandbox built on top of KanColle**.
 
-- one full sortie session from departure to return
-- one practice battle result
-- fleet composition, flagship / MVP, battle rank, broad enemy classification, damage state, node trail, and a few other safe signals
+它現在有兩條主要來源線：
 
-Then it renders the same captured result in three voices:
+- `live_sortie`
+  - 把真實 sortie / 演習結果轉成不同文書
+- `sandbox`
+  - 用本地 preset 海域、敵情主題、戰果口徑，生成擬制公報與參考文書
+
+也有兩條明確不同的 truth policy：
+
+- `硬派詳報`
+  - 前線艦隊司令往上級回報
+  - 必須說真話
+- `標準公報` / `短報`
+  - 大本營對人民的公告
+  - 可以失真、可以誇大、可以故意把壞結果寫成像勝利
+
+## Core Principle / 大原則
+
+Because this plugin is **for fun**, user-facing wording should feel closer to something an IJN-style document might plausibly say than to raw KanColle UI text.
+
+因此這個 plugin 的優先順序是：
+
+- 保留能幫助邏輯判斷的 game data
+- 但 user-facing text 優先使用 IJN 風的字面
+- `硬派詳報` 不直接漏出 `S / A / B` 這類遊戲 UI 字級
+- 寫不到的細節就寫 `未詳` / `細目未詳`
+- `標準公報` / `短報` 可以強宣傳，但不亂捏 repo 根本沒有的精確數字
+
+如果未來有取捨，原則是：
+
+- `硬派詳報`：更像上申文書，而且仍然誠實
+- `標準公報` / `短報`：更像大本營公告，而且更荒謬地自信
+
+## What It Does Now / 現在能做什麼
+
+### 1. Live sortie documents
+
+同一筆真實 capture，現在可以生成三種文書：
 
 - `標準公報`
-  - propaganda-first public bulletin
-  - can exaggerate victory tone and minimize losses
-  - intentionally does **not** print fake precise numbers such as shot-down aircraft counts
-- `硬派詳報`
-  - truth-first internal report
-  - sender stands on the player admiral side
-  - uses chaptered report structure and node sections
-  - writes `未詳` / `細目未詳` when detail is not available instead of inventing it
+  - 大本營正式公告風
+  - 是 public propaganda layer
+  - 會把真實戰況轉寫成對外可發布的官樣公報
 - `短報`
-  - shorter propaganda-facing official notice
-  - easier to copy and share
+  - 大本營逐號速報風
+  - 比 `標準公報` 更短、更尖、更敢吹
+  - 不是單純縮短版 prose，而是 bulletin / dispatch 節奏
+- `硬派詳報`
+  - 前線艦隊司令往上呈報的 truth-first 文書
+  - 以章節與交戰點小節構成
+  - 不知道的地方就老實寫 `未詳`
 
-この plugin が取るのは、
+### 2. Local sandbox documents
 
-- 出港から帰投までの sortie 一件
-- 単発の演習一件
-- 編成、旗艦 / MVP、戦果、ざっくりした敵情、損害、node trail などの「安全に言える範囲」の事実
+現在主頁也有 `Sandbox / 文書遊戯` 面板，可用本地 preset 直接生成：
 
-です。
+- `擬制標準公報`
+- `擬制短報`
+- `戦闘参考詳報`
+- `作戦準備覚書`
 
-その上で同じ capture を、
+這一區：
 
+- 不寫入 live battle history
+- 不需要真實 sortie
+- 比較像用艦娘世界觀做文體、情報、宣傳遊戲
+
+## Captured Facts / 實際會抓哪些事實
+
+目前 live line 會抓到的是「安全而保守」的一層：
+
+- 一次 sortie 從出擊到回港的一筆 session
+- 一次演習的一筆結果
+- 編成、旗艦、MVP
+- 戰果類別與損害概況
+- 敵方大類型
+- node trail
+- 一部分可安全使用的 battle context
+- Poi API 可得時的提督名稱與軍銜
+
+它**不是**完整 battle replay，也**不是** action-by-action 戰鬥分析器。
+
+## What It Intentionally Does Not Do
+
+這些是目前刻意不做的：
+
+- 不把 full raw API packet 永久存進 history
+- 不把 plugin 做成完整 battle viewer
+- 不輸出 repo 無法穩定確認的精確彈數 / 魚雷數 / 擊墜數
+- 不把 `硬派詳報` 和 public propaganda 混在一起
+- 不為了史味去偽造它其實不知道的技術細節
+
+## Why The Styles Behave So Differently
+
+這不是單純「三種文風」而已，而是三種不同文件角色：
+
+- `硬派詳報`
+  - 是 internal report
+  - 站在玩家提督 / 前線艦隊司令這一側
+  - 對上級說真話
 - `標準公報`
-  - 宣伝優先の対外公報
-  - 勝利の言い方は盛る
-  - ただし撃墜数のような精密な fake 数字は出さない
-- `硬派詳報`
-  - 事実優先の内部文書
-  - 発信者はプレイヤー提督側
-  - 章立て + node ごとの節で書く
-  - detail が無い所は `未詳` と書いてごまかさない
+  - 是正式 public announcement
+  - 會把真相加工成可公布版本
 - `短報`
-  - 短く切った公報
-  - 共有向け
+  - 是更像逐號發表的 propaganda bulletin
+  - 作用是迅速、強勢、穩定民心，不是忠實記錄
 
-に書き分けます。
+## Output Direction / 出力方向
 
-## Current Phase / 現在の実装段階
+The exact text is no longer a single hard-coded template.
+Saved entries keep stable wording, but different entries can choose different phrasing families.
 
-Current status is the roadmap's **Phase 1**:
-
-- public styles now use a deterministic rhetoric engine with phrase banks
-- formal report now has separate sender / recipient handling
-- history keeps stable rendered text per style instead of regenerating everything differently each time
-- settings now include minimal formal-report addressing controls
-
-今は roadmap の **Phase 1** です。
-
-- 公報系は deterministic な phrase bank を使う
-- 硬派詳報は発受文の扱いを分離した
-- 履歴は style ごとの描画結果を保持し、毎回別文になるのを避ける
-- 設定画面に硬派詳報の最小限の発受設定を追加した
-
-## What Is Implemented Now / 今できること
-
-- Capture one sortie as one history entry, and one practice as one history entry
-- Render three distinct styles from the same captured result
-- Copy the generated text or export it as `.txt`
-- Keep recent history across Poi restarts
-- Keep public-style phrasing deterministic per saved entry
-- Detect admiral identity from Poi API responses when available
-- Use detected admiral identity as the formal report sender, or fall back to a manual sender line
-- Set the formal report recipient in settings
-- Keep `硬派詳報` fact-oriented and separate from public propaganda styles
-
-## What It Does Not Do Yet / まだやっていないこと
-
-This is important:
-
-- It does **not** store full raw API packets in history
-- It does **not** yet build a full per-action battle ledger
-- It does **not** yet report exact shell counts / torpedo counts
-- It does **not** try to support every strange event battle shape in Phase 1
-- `硬派詳報` is more truthful now, but still summary-level in many places
-
-ここは大事です。
-
-- 履歴に full raw API packet は保存しません
-- まだ逐次 battle action ledger は作っていません
-- 砲弾何発 / 魚雷何本のような exact count はまだ出しません
-- Phase 1 の段階では特殊 battle shape 全対応を目指していません
-- `硬派詳報` は truth-first になったものの、まだ多くの箇所は summary-level です
-
-## Why The Styles Behave Differently / なぜ文体ごとに態度が違うのか
-
-The split is intentional:
-
-- `標準公報` and `短報` are allowed to behave like wartime propaganda.
-  - They can inflate tone.
-  - They can soften losses.
-  - They can present tactical withdrawal as a dignified transfer / regrouping style narrative.
-- `硬派詳報` is not allowed to do that.
-  - It should stay on the "reporting upward" side.
-  - If the plugin does not know a detail, it should say so.
-
-この分離は意図的です。
-
-- `標準公報` と `短報` は戦時 propaganda として振る舞ってよい
-  - 言い方は盛る
-  - 損害は和らげる
-  - 撤退も「転進」っぽく見せる
-- `硬派詳報` はそれをしない
-  - 上申文書の側に立つ
-  - 分からない detail は分からないと書く
-
-## Example Direction / 出力の方向性
-
-The exact phrasing is no longer a single fixed template.
-Saved entries keep stable wording, but different entries can choose different lines.
-
-今は一枚テンプレではなく、saved entry ごとに wording を固定する方式です。
-同じ履歴は安定して同じ文章になりますが、別 entry では別句を選ぶことがあります。
-
-Example names below are anonymized placeholders for documentation only.
-以下の固有名は README 用の去識別化サンプルです。
-
-Representative direction:
+以下範例中的固有名是 README 用的去識別化佔位名。
 
 ### `標準公報`
 
@@ -184,9 +132,12 @@ Representative direction:
 
 令和八年三月十四日
 
-ブルネイ泊地沖方面、敵潜水兵力ノ企図ヲ粉砕
+ブルネイ泊地沖方面、敵潜航企図ヲ挫折
 
-敵潜水兵力ニ打撃ヲ加ヘ大ナル戦果ヲ収メタリ
+敵潜航兵力ニ打撃ヲ与ヘ、大ナル戦果ヲ収メタリ
+
+帝国海軍出撃部隊ハ、同方面ニ於テ敵潜航兵力ノ蠢動ヲ察知シ、直ニ之ヲ邀撃セリ。
+爾後反復攻撃ヲ加ヘ、敵企図ヲ挫折セシメ、海上交通保全ノ目的ヲ概ネ達成セリ。
 ```
 
 ### `硬派詳報`
@@ -199,12 +150,15 @@ Representative direction:
 発：海軍少将 某
 宛：聯合艦隊司令部
 
+件名：ブルネイ泊地沖ニ於ケル敵潜航兵力交戦詳報
+
 四、戦闘経過。
 【第二交戦点】
 　交戦時刻　1240
-　敵情　敵深海潜水艦隊 II群。確認艦種 潜水ヨ級、潜水カ級。
-　交戦結果　敵ニ甚大ナル打撃ヲ与ヘ、我行動概ネ所期ノ通リ。
+　敵情　敵深海潜水艦隊。確認艦種 潜水ヨ級、潜水カ級。
+　交戦結果　敵ニ有効ナル打撃ヲ加ヘ、所定行動概ネ支障ナシ。
 　交戦概要　航空攻撃ヲ伴フ交戦。砲雷戦細目未詳。
+　我方被害　我方損害ナシ。
 ```
 
 ### `短報`
@@ -216,14 +170,27 @@ Representative direction:
 
 ブルネイ泊地沖方面、敵企図ヲ粉砕
 
-一、我軍、攻撃ヲ開始セリ。
+一、我軍、直ニ之ヲ邀撃セリ。
 二、敵潜航企図ヲ挫折セシメタリ。
 三、戦果顕著ナリ。
 ```
 
-## Quick Install / クイックインストール
+## Sandbox Direction / 沙盒方向
 
-For macOS + Poi:
+sandbox 不是要假裝成真實戰果記錄，而是做：
+
+- pseudo public generation
+- reference / planning documents
+- 海域印象與敵情想定的文書化
+
+也就是：
+
+- 艦娘當底層素材
+- 文體、情報、宣傳當玩法
+
+## Install / 安裝
+
+### Quick install
 
 ```bash
 npm install 'git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git' --prefix "$HOME/Library/Application Support/poi/plugins"
@@ -233,42 +200,39 @@ Then:
 
 1. Restart Poi or reload the plugin list
 2. Enable `KC War Report`
-3. Run a sortie or a practice once
+3. Run one sortie or practice, or open the sandbox panel directly
 4. Open the plugin tab
 
-## Update / 更新
-
-Run the same install command again:
-
-```bash
-npm install 'git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git' --prefix "$HOME/Library/Application Support/poi/plugins"
-```
-
-## Install From Source / ソースから導入
+### Install from source
 
 ```bash
 git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.6.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.7.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
+
+### Update
+
+Run the same install command again, or repack from source and reinstall the newest tarball.
 
 ## Settings / 設定
 
-Current formal report settings:
+目前比較重要的是 `硬派詳報` 的發受文設定：
 
-- whether to use detected admiral identity as the sender
-- fallback sender line
-- recipient line
-
-現在の硬派詳報設定:
-
-- 検出した提督名を sender に使うか
+- 是否優先使用 Poi API 偵測到的提督名字與軍銜
 - sender fallback
 - recipient
 
-## Validation / 検証
+提督名稱 / 軍銜來源為本機 Poi session 的：
+
+- `/kcsapi/api_get_member/basic`
+- `/kcsapi/api_port/port`
+
+抓不到時才退回 fallback。
+
+## Validation / 檢證
 
 ```bash
 npm install
@@ -276,6 +240,6 @@ npm run typeCheck
 npm test -- --runInBand
 ```
 
-## Patch Notes / パッチノート
+## Patch Notes
 
 See [PATCHNOTES.md](PATCHNOTES.md).
