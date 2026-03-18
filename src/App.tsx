@@ -13,6 +13,7 @@ import { IconNames } from '@blueprintjs/icons'
 import React, { StrictMode, useCallback, useMemo, useState } from 'react'
 import styled from 'styled-components'
 
+import { SandboxPanel } from './SandboxPanel'
 import {
   deleteWarReportHistoryEntry,
   selectWarReportHistoryEntry,
@@ -502,6 +503,8 @@ const AppMain: React.FC = () => {
             </Sidebar>
           </SummaryGrid>
         )}
+
+        <SandboxPanel />
       </Shell>
     </Page>
   )
