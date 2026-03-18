@@ -190,19 +190,20 @@ describe('war report sortie architecture', () => {
     const report = buildWarReportFromRecord(normalizeSortieSession(sortieSession, 'completed'))
 
     expect(report.bulletin).toContain('ブルネイ泊地沖')
-    expect(report.body).toContain('敵潜水兵力')
+    expect(report.body).toMatch(/敵潜[水航]兵力/)
     expect(report.body).not.toContain('撃墜')
     expect(report.body).not.toContain('魚雷')
   })
 
-  it('marks interrupted sorties as propaganda-heavy transfer reports in public styles', () => {
+  it('turns interrupted sorties into propaganda-heavy public victory claims', () => {
     const failed = buildWarReportFromRecord(
       normalizeSortieSession(sortieSession, 'failed'),
       'standard_bulletin',
     )
 
     expect(failed.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
-    expect(failed.body).toMatch(/転進|反転|離脱/)
+    expect(failed.body).toMatch(/成果|戦果|敵企図/)
+    expect(failed.body).not.toMatch(/転進|反転|離脱/)
     expect(failed.body).not.toContain('敵機')
   })
 
@@ -430,11 +431,14 @@ describe('war report sortie architecture', () => {
 
     expect(record.failureMode).toBe('failed_with_retreat')
     expect(standard.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
-    expect(standard.body).toMatch(/転進|反転/)
+    expect(standard.body).toMatch(/成果|戦果|敵企図/)
+    expect(standard.body).not.toMatch(/転進|反転|離脱/)
     expect(formal.body).toContain('大破艦　一隻')
     expect(formal.body).toContain('砲雷戦細目未詳')
     expect(formal.body).toContain('戦果総括')
     expect(short.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
+    expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|赫々|圧倒|壊滅的/)
+    expect(`${short.bulletin}\n${short.body}`).not.toMatch(/転進|反転|離脱/)
     expect(standard.body).not.toContain('撃墜')
     expect(formal.body).not.toContain('発砲')
     expect(short.body).not.toContain('魚雷')
@@ -462,10 +466,13 @@ describe('war report sortie architecture', () => {
 
     expect(record.failureMode).toBe('failed_with_heavy_losses')
     expect(record.damageSummary.heavyDamageCount).toBeGreaterThanOrEqual(2)
-    expect(standard.body).toMatch(/損傷|損耗|損害/)
+    expect(standard.body).toMatch(/成果|戦果|敵企図/)
+    expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/損傷|損耗|損害|大破|中破/)
     expect(formal.body).toContain('大破艦　若干')
     expect(formal.body).toContain('七、所見。')
     expect(short.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
+    expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|赫々|圧倒|壊滅的/)
+    expect(`${short.bulletin}\n${short.body}`).not.toMatch(/損傷|損耗|損害|大破|中破/)
   })
 
   it('selects air suppression as the main narrative for air-power engagements', () => {

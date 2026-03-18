@@ -24,6 +24,29 @@ type FormalEngagementFamily = {
   surfaceVariants: string[]
 }
 
+type PublicOfficialOutcome =
+  | 'claimed_victory'
+  | 'claimed_operational_success'
+  | 'claimed_battlefield_contribution'
+  | 'claimed_crushing_blow'
+
+type PublicEnemyFrame =
+  | 'air_power'
+  | 'submarine_force'
+  | 'enemy_main_force'
+  | 'enemy_force'
+
+type PublicDamageDisclosure = 'concealed'
+
+type PublicToneLevel = 'official' | 'maximal'
+
+type PublicPropagandaProfile = {
+  officialOutcome: PublicOfficialOutcome
+  enemyFrame: PublicEnemyFrame
+  damageDisclosure: PublicDamageDisclosure
+  toneLevel: PublicToneLevel
+}
+
 const toJapaneseDate = (timestamp: number) => {
   const date = new Date(timestamp)
   const year = date.getFullYear()
@@ -55,6 +78,65 @@ const hasNonTrivialDamage = (context: ReportRenderContext) =>
 
 const buildEncounterObject = (context: ReportRenderContext) =>
   context.enemyDisplay === '敵航空兵力' ? '敵航空兵力ヲ擁スル敵部隊' : context.enemyDisplay
+
+const buildPublicPropagandaProfile = (
+  context: ReportRenderContext,
+  style: WarReportStyle,
+  _fingerprint: number,
+): PublicPropagandaProfile => {
+  const toneLevel: PublicToneLevel = style === 'short_bulletin' ? 'maximal' : 'official'
+  const enemyFrame: PublicEnemyFrame =
+    context.enemyCategory === 'air_power'
+      ? 'air_power'
+      : context.enemyCategory === 'submarine_force'
+        ? 'submarine_force'
+        : context.enemyCategory === 'main_force'
+          ? 'enemy_main_force'
+          : 'enemy_force'
+
+  if (context.failureMode === 'failed_with_retreat') {
+    return {
+      officialOutcome:
+        toneLevel === 'maximal' ? 'claimed_crushing_blow' : 'claimed_operational_success',
+      enemyFrame,
+      damageDisclosure: 'concealed',
+      toneLevel,
+    }
+  }
+
+  if (context.failureMode === 'failed_with_heavy_losses') {
+    return {
+      officialOutcome:
+        toneLevel === 'maximal'
+          ? 'claimed_crushing_blow'
+          : 'claimed_battlefield_contribution',
+      enemyFrame,
+      damageDisclosure: 'concealed',
+      toneLevel,
+    }
+  }
+
+  return {
+    officialOutcome: toneLevel === 'maximal' ? 'claimed_crushing_blow' : 'claimed_victory',
+    enemyFrame,
+    damageDisclosure: 'concealed',
+    toneLevel,
+  }
+}
+
+const buildPublicEncounterObject = (profile: PublicPropagandaProfile) => {
+  switch (profile.enemyFrame) {
+    case 'air_power':
+      return '敵航空兵力ヲ擁スル敵部隊'
+    case 'submarine_force':
+      return '敵潜航兵力ヲ擁スル敵部隊'
+    case 'enemy_main_force':
+      return '敵主力部隊'
+    case 'enemy_force':
+    default:
+      return '敵部隊'
+  }
+}
 
 const formatCountLabel = (count: number) => {
   if (count <= 0) {
@@ -322,54 +404,62 @@ const buildMvpClause = (
   ])} `
 }
 
-const buildPublicDamageFamilies = (context: ReportRenderContext) =>
+const buildPublicDamageFamilies = (
+  _context: ReportRenderContext,
+  style: Extract<WarReportStyle, 'standard_bulletin' | 'short_bulletin'>,
+  profile: PublicPropagandaProfile,
+) =>
   uniqueFamilies<TextFamily>([
-    isHeavyLossFailure(context) && {
-      id: 'damage-heavy-failure',
-      variants: [
-        '一部艦艇ニ損傷ヲ認メタルモ主力態勢ヲ保持シ次段行動ニ備ヘタリ。',
-        '我部隊ニ若干ノ損害アリト雖モ戦力ノ核心ハ依然健在ナリ。',
-        '敵反撃ニ依リ一部損傷ヲ生ゼシモ、部隊統制ハ終始保持セラレタリ。',
-      ],
+    profile.officialOutcome === 'claimed_operational_success' && {
+      id: `${style}-continuity-operational`,
+      variants:
+        style === 'short_bulletin'
+          ? [
+              '各隊整斉トシテ後続行動ニ移ル。',
+              '部隊態勢依然整然、作戦進展ヲ妨ゲズ。',
+              '統制保持終始堅固ナリ。',
+            ]
+          : [
+              '部隊態勢ヲ整ヘ、次段行動準備滞リナシ。',
+              '各隊行動整斉ニシテ、作戦成果保持ニ支障ナシ。',
+              '部隊統制依然堅固ニシテ、後続行動準備整ヘリ。',
+            ],
     },
-    isFailedRetreat(context) && {
-      id: 'damage-retreat',
-      variants: [
-        '我方一部艦艇ニ損傷ヲ見タル為、隊形ヲ整ヘテ転進セリ。',
-        '作戦継続ニ先立チ部隊保全ヲ優先シ整然ト反転セリ。',
-        '損傷艦収容ノ上、次段作戦準備ノ為戦場ヲ離脱セリ。',
-      ],
+    profile.officialOutcome === 'claimed_battlefield_contribution' && {
+      id: `${style}-continuity-contribution`,
+      variants:
+        style === 'short_bulletin'
+          ? [
+              '敢闘ノ成果、爾後ノ作戦ニ資ス。',
+              '部隊統制終始堅固ニシテ戦局進展ヲ助ク。',
+              '各隊行動整然、作戦発展ニ支障ナシ。',
+            ]
+          : [
+              '部隊統制終始堅固ニシテ、戦局進展ニ資スル態勢ヲ維持セリ。',
+              '各隊行動整斉ニシテ、作戦発展ヲ阻害スル所ナシ。',
+              '敢闘ノ成果保持セラレ、後続作戦ニ資スル態勢依然整然タリ。',
+            ],
     },
-    !hasNonTrivialDamage(context) && {
-      id: 'damage-none',
-      variants: [
-        '我方損害軽微ニシテ戦力ニ何等ノ動揺ナシ。',
-        '我部隊ハ終始戦力旺盛ニシテ任務遂行ニ支障ナシ。',
-        '我方各艦ノ戦闘力ハ保持セラレ、続行態勢依然堅固ナリ。',
-      ],
-    },
-    context.damageSeverity === 'heavy' && {
-      id: 'damage-heavy',
-      variants: [
-        '我方一部艦艇ニ相応ノ損害アリト雖モ主力ハ依然健在ナリ。',
-        '若干ノ損耗ヲ伴ヒタルモ、全般戦況ニ重大ナル影響ナシ。',
-        '一部艦艇ノ損傷ヲ認メタルモ作戦全体ノ帰趨ヲ動カスニ至ラズ。',
-      ],
-    },
-    hasNonTrivialDamage(context) && {
-      id: 'damage-light',
-      variants: [
-        '我方一部艦艇ニ軽微損傷アリト雖モ行動能力旺盛ナリ。',
-        '若干ノ被害ヲ蒙リタルモ隊形・統制共ニ良好ナリ。',
-        '局地的損傷ヲ見タルモ全般戦闘力ハ毫モ動揺セズ。',
-      ],
+    profile.damageDisclosure === 'concealed' && {
+      id: `${style}-continuity-concealed`,
+      variants:
+        style === 'short_bulletin'
+          ? [
+              '部隊統制終始堅固ナリ。',
+              '各隊整然、戦力運用依然旺盛ナリ。',
+              '作戦進展ニ支障ナシ。',
+            ]
+          : [
+              '部隊態勢終始整然ニシテ、作戦進展ニ支障ナシ。',
+              '各隊行動統一セラレ、戦力運用依然堅固ナリ。',
+              '部隊統制保持良好ニシテ、作戦主導権依然我ニ在リ。',
+            ],
     },
   ])
 
 const buildStandardHeadlineFamilies = (
   context: ReportRenderContext,
-  narrative: MainNarrative,
-  tags: NarrativeTags,
+  profile: PublicPropagandaProfile,
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -385,62 +475,60 @@ const buildStandardHeadlineFamilies = (
   }
 
   return uniqueFamilies<TextFamily>([
-    narrative === 'disciplined_withdrawal' && {
-      id: 'headline-orderly-withdrawal',
+    profile.officialOutcome === 'claimed_operational_success' && {
+      id: 'headline-operational-success',
       variants: [
-        `${context.operationPhrase}方面交戦、敵ニ打撃ヲ与ヘ整然転進`,
-        `${context.operationPhrase}方面戦況、敢闘ノ上次段準備ニ移行`,
-        `${context.operationPhrase}方面交戦、部隊整然ト反転`,
+        `${context.operationPhrase}方面交戦、敵企図挫折ノ成果ヲ確保`,
+        `${context.operationPhrase}方面戦況、作戦成果ヲ確保シ次段行動ニ資ス`,
+        `${context.operationPhrase}方面交戦、敵ニ打撃ヲ与ヘ戦局ニ寄与`,
       ],
     },
-    narrative === 'damage_control' && {
-      id: 'headline-blooded-success',
+    profile.officialOutcome === 'claimed_battlefield_contribution' && {
+      id: 'headline-battlefield-contribution',
       variants: [
-        `${context.operationPhrase}方面交戦、若干ノ被害ヲ忍ビ戦果ヲ収ム`,
-        `${context.operationPhrase}方面交戦、損耗アリト雖モ主導権保持`,
-        `${context.operationPhrase}方面戦況、部隊統制ヲ維持シ戦果ヲ挙グ`,
+        `${context.operationPhrase}方面交戦、敢闘ノ裡敵ニ打撃`,
+        `${context.operationPhrase}方面戦況、戦局進展ニ寄与スル成果`,
+        `${context.operationPhrase}方面交戦、敵企図ヲ圧シ戦果ヲ録ス`,
       ],
     },
-    tags.enemyTheme === 'air' && {
+    profile.enemyFrame === 'air_power' && {
       id: 'headline-air-suppression',
       variants: [
         `${context.operationPhrase}方面交戦、敵航空兵力ヲ痛撃`,
         `${context.operationPhrase}方面戦況、敵航空攻勢ヲ挫折セシム`,
-        `${context.operationPhrase}方面交戦、敵空襲企図ヲ破摧`,
+        `${context.operationPhrase}方面交戦、敵航空企図ヲ破摧`,
       ],
     },
-    tags.enemyTheme === 'submarine' && {
-      id: 'headline-submarine-intercept',
+    profile.enemyFrame === 'submarine_force' && {
+      id: 'headline-submarine-claim',
       variants: [
         `${context.operationPhrase}方面交戦、敵潜水兵力ヲ制圧`,
         `${context.operationPhrase}方面戦況、敵潜航兵力ニ打撃`,
         `${context.operationPhrase}方面交戦、潜航敵部隊ヲ圧倒`,
       ],
     },
-    context.mvpDisplay
-      ? {
-      id: 'headline-valorized-success',
+    profile.enemyFrame === 'enemy_main_force' && {
+      id: 'headline-main-force-claim',
       variants: [
-        `${context.operationPhrase}方面交戦、勇戦敢闘ノ裡戦果ヲ拡張`,
-        `${context.operationPhrase}方面交戦、部隊奮迅ノ働キ顕著`,
-        `${context.operationPhrase}方面戦況、敢闘ノ末敵ニ打撃`,
+        `${context.operationPhrase}方面交戦、敵主力ニ打撃`,
+        `${context.operationPhrase}方面戦況、敵主力ノ企図ヲ覆ス`,
+        `${context.operationPhrase}方面交戦、敵艦隊ニ圧力ヲ加フ`,
       ],
-      }
-      : null,
-    {
-      id: 'headline-decisive-blow',
+    },
+    profile.officialOutcome === 'claimed_crushing_blow' && {
+      id: 'headline-crushing-blow',
       variants: [
         `${context.operationPhrase}方面交戦、赫々タル戦果ヲ収ム`,
-        `${context.operationPhrase}方面交戦、主導権ヲ確保ス`,
-        `${context.operationPhrase}方面戦況、敵ニ重大ナル打撃ヲ与フ`,
+        `${context.operationPhrase}方面交戦、敵企図ヲ粉砕`,
+        `${context.operationPhrase}方面戦況、主導権ヲ確保ス`,
       ],
     },
     {
-      id: 'headline-mission-success',
+      id: 'headline-victory',
       variants: [
-        `${context.operationPhrase}方面交戦、所定任務達成ニ資スル戦果`,
-        `${context.operationPhrase}方面交戦、敵企図ヲ挫キ任務ヲ完遂`,
-        `${context.operationPhrase}方面戦況、作戦目的達成ニ寄与`,
+        `${context.operationPhrase}方面交戦、作戦成果ヲ収ム`,
+        `${context.operationPhrase}方面交戦、敵ニ打撃ヲ与ヘ戦果ヲ拡張`,
+        `${context.operationPhrase}方面戦況、作戦進展ニ寄与`,
       ],
     },
   ])
@@ -448,8 +536,7 @@ const buildStandardHeadlineFamilies = (
 
 const buildStandardSubheadlineFamilies = (
   context: ReportRenderContext,
-  narrative: MainNarrative,
-  tags: NarrativeTags,
+  profile: PublicPropagandaProfile,
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -465,7 +552,23 @@ const buildStandardSubheadlineFamilies = (
   }
 
   return uniqueFamilies<TextFamily>([
-    narrative === 'air_suppression' && {
+    profile.officialOutcome === 'claimed_operational_success' && {
+      id: 'subheadline-operational-success',
+      variants: [
+        '敵企図ヲ挫折セシメ作戦成果ヲ確保ス',
+        '部隊統制堅固ニシテ次段行動ニ資ス',
+        '所定行動ノ成果ヲ保持シ戦局ニ寄与ス',
+      ],
+    },
+    profile.officialOutcome === 'claimed_battlefield_contribution' && {
+      id: 'subheadline-battlefield-contribution',
+      variants: [
+        '敢闘ノ裡敵ニ圧力ヲ加ヘ戦局進展ニ寄与ス',
+        '奮戦ノ成果、爾後ノ作戦ニ資スル所大ナリ',
+        '主力ノ行動終始果敢ニシテ敵企図ヲ抑止ス',
+      ],
+    },
+    profile.enemyFrame === 'air_power' && {
       id: 'subheadline-air-result',
       variants: [
         '敵航空兵力ヲ痛撃シ戦局ヲ有利ニ導ク',
@@ -473,7 +576,7 @@ const buildStandardSubheadlineFamilies = (
         '敵空襲企図ヲ覆シ戦果拡張ニ資ス',
       ],
     },
-    narrative === 'submarine_intercept' && {
+    profile.enemyFrame === 'submarine_force' && {
       id: 'subheadline-submarine-result',
       variants: [
         '敵潜航兵力ヲ圧倒シ海面ノ安全ヲ確保ス',
@@ -481,52 +584,37 @@ const buildStandardSubheadlineFamilies = (
         '潜航敵部隊ヲ圧シ所定行動ヲ支障ナク続行ス',
       ],
     },
-    narrative === 'disciplined_withdrawal' && {
-      id: 'subheadline-withdrawal-result',
+    profile.enemyFrame === 'enemy_main_force' && {
+      id: 'subheadline-main-force-result',
       variants: [
-        '敵ニ打撃ヲ加ヘ部隊保全ヲ図リ次段準備ニ移行ス',
-        '敢闘ノ後隊形ヲ保チ整然転進ス',
-        '敵企図ヲ挫キ主力ヲ保全シ反転ス',
+        '敵主力ニ打撃ヲ与ヘ作戦進展ニ寄与ス',
+        '敵艦隊ノ企図ヲ抑止シ主導権ヲ確保ス',
+        '敵主力行動ヲ牽制シ戦局ヲ有利ニ導ク',
       ],
     },
-    hasNonTrivialDamage(context) && {
-      id: 'subheadline-damage-managed',
+    profile.officialOutcome === 'claimed_crushing_blow' && {
+      id: 'subheadline-crushing-blow',
       variants: [
-        '若干ノ損耗アリト雖モ統制ヲ維持シ作戦成果ヲ挙グ',
-        '損傷ヲ生ズルモ隊勢ニ動揺ナク交戦ヲ完遂ス',
-        '局地的被害ヲ蒙リタルモ作戦目的達成ニ資ス',
+        '主導権ヲ掌握シ戦果ヲ拡張ス',
+        '敵企図ヲ粉砕シ作戦成果ヲ確保ス',
+        '戦局ヲ有利ニ導キ赫々タル成果ヲ録ス',
       ],
     },
-    context.mvpDisplay
-      ? {
-      id: 'subheadline-valor-focus',
-      variants: [
-        '奮戦顕著ナル各艦ノ働キ戦局ニ寄与ス',
-        '各艦乗員敢闘シテ所期ノ成果ヲ収ム',
-        '部隊奮励ノ成果著シク武勲録スベキモノアリ',
-      ],
-      }
-      : null,
     {
       id: 'subheadline-frontline-success',
       variants: [
-        '主導権ヲ掌握シ作戦目的達成ニ資スル打撃ヲ与フ',
-        '敵企図ヲ粉砕シ戦果ヲ拡張ス',
-        '戦局ヲ有利ニ導キ所定行動ヲ貫徹ス',
-      ],
-    },
-    tags.enemyTheme === 'air' && {
-      id: 'subheadline-air-theme',
-      variants: [
-        '敵航空兵力ノ攻勢ヲ頓挫セシメ作戦進展ニ寄与ス',
-        '来襲敵機群ニ打撃ヲ与ヘ主導権ヲ確保ス',
-        '敵航空行動ヲ封殺シ戦局ノ進展ヲ助ク',
+        '主導権ヲ掌握シ作戦成果ヲ拡張ス',
+        '敵企図ヲ抑止シ戦局ヲ有利ニ導ク',
+        '所定行動ノ成果顕著ニシテ戦局ニ寄与ス',
       ],
     },
   ])
 }
 
-const buildStandardSituationOpeningFamilies = (context: ReportRenderContext) => {
+const buildStandardSituationOpeningFamilies = (
+  context: ReportRenderContext,
+  profile: PublicPropagandaProfile,
+) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
       {
@@ -548,40 +636,40 @@ const buildStandardSituationOpeningFamilies = (context: ReportRenderContext) => 
       variants: [
         `帝国海軍出撃部隊ハ、${toJapaneseDate(
           context.occurredAt,
-        )}、${context.operationPhrase}方面ニ於テ${buildEncounterObject(context)}ニ遭遇セリ。`,
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル行動中、${buildEncounterObject(
-          context,
+        )}、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(profile)}ニ遭遇セリ。`,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル行動中、${buildPublicEncounterObject(
+          profile,
         )}ヲ捕捉セリ。`,
-        `帝国海軍出撃部隊ノ一部ハ、${context.operationPhrase}方面ニ於テ${buildEncounterObject(
-          context,
+        `帝国海軍出撃部隊ノ一部ハ、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
+          profile,
         )}ト交戦セリ。`,
       ],
     },
     {
       id: 'situation-intercept',
       variants: [
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ出現セル${buildEncounterObject(
-          context,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ出現セル${buildPublicEncounterObject(
+          profile,
         )}ニ対シ直ニ之ヲ邀撃セリ。`,
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面行動中、${buildEncounterObject(
-          context,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面行動中、${buildPublicEncounterObject(
+          profile,
         )}ノ接近ヲ認メ攻撃態勢ニ移レリ。`,
-        `帝国海軍出撃部隊ノ一部ハ、${context.operationPhrase}方面ニ於テ${buildEncounterObject(
-          context,
+        `帝国海軍出撃部隊ノ一部ハ、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
+          profile,
         )}ト接触シ攻撃ヲ開始セリ。`,
       ],
     },
     {
       id: 'situation-deployment',
       variants: [
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ行動中、${buildEncounterObject(
-          context,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ行動中、${buildPublicEncounterObject(
+          profile,
         )}ノ出現ヲ見タリ。`,
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル作戦行動中、${buildEncounterObject(
-          context,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル作戦行動中、${buildPublicEncounterObject(
+          profile,
         )}ト相対セリ。`,
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ${buildEncounterObject(
-          context,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
+          profile,
         )}ヲ発見シ交戦ニ入レリ。`,
       ],
     },
@@ -590,7 +678,7 @@ const buildStandardSituationOpeningFamilies = (context: ReportRenderContext) => 
 
 const buildStandardResultOpeningFamilies = (
   context: ReportRenderContext,
-  narrative: MainNarrative,
+  profile: PublicPropagandaProfile,
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -606,15 +694,23 @@ const buildStandardResultOpeningFamilies = (
   }
 
   return uniqueFamilies<TextFamily>([
-    narrative === 'clean_sweep' && {
-      id: 'result-clean-sweep',
+    profile.officialOutcome === 'claimed_operational_success' && {
+      id: 'result-operational-success',
       variants: [
-        '我部隊ハ主導権ヲ掌握シ、敵企図ヲ粉砕セリ。',
-        '我部隊ハ敵ニ先制的打撃ヲ与ヘ、所期ノ成果ヲ収メタリ。',
-        '我部隊ノ行動果敢適切ニシテ、交戦全般ヲ優位ニ導ケリ。',
+        '我部隊ハ敵企図ヲ挫折セシメ、作戦成果確保ニ成功セリ。',
+        '我部隊ノ行動沈着機敏ニシテ、所定成果ヲ保持シ得タリ。',
+        '我部隊ハ戦局推移ヲ有利ニ導キ、次段行動ニ資スル成果ヲ収メタリ。',
       ],
     },
-    narrative === 'air_suppression' && {
+    profile.officialOutcome === 'claimed_battlefield_contribution' && {
+      id: 'result-battlefield-contribution',
+      variants: [
+        '我部隊ハ敢闘ノ裡敵ニ打撃ヲ与ヘ、戦局進展ニ寄与セリ。',
+        '我部隊ノ奮戦ハ敵企図抑止ニ資シ、作戦成果顕著ナリ。',
+        '我部隊ハ果敢ナル行動ヲ以テ敵ニ圧力ヲ加ヘ、戦局寄与ノ戦果ヲ収メタリ。',
+      ],
+    },
+    profile.enemyFrame === 'air_power' && {
       id: 'result-air-suppression',
       variants: [
         '来襲敵機群ニ打撃ヲ与ヘ、敵航空攻撃企図ヲ挫折セシメタリ。',
@@ -622,7 +718,7 @@ const buildStandardResultOpeningFamilies = (
         '敵航空企図ヲ圧倒シ、局面ヲ有利ニ転ゼシメタリ。',
       ],
     },
-    narrative === 'submarine_intercept' && {
+    profile.enemyFrame === 'submarine_force' && {
       id: 'result-submarine-intercept',
       variants: [
         '対潜戦闘処置適切ニシテ、敵潜航兵力ヲ圧倒セリ。',
@@ -630,28 +726,20 @@ const buildStandardResultOpeningFamilies = (
         '敵潜水兵力ノ企図ヲ挫キ、所定行動ヲ継続セリ。',
       ],
     },
-    narrative === 'damage_control' && {
-      id: 'result-damage-control',
+    profile.officialOutcome === 'claimed_crushing_blow' && {
+      id: 'result-crushing-blow',
       variants: [
-        '若干ノ被害ヲ伴ヒタルモ、部隊統制ヲ保チ作戦目的達成ニ資スル成果ヲ収メタリ。',
-        '損耗ヲ生ズルモ、隊勢ニ動揺ナク主導権ヲ保持セリ。',
-        '局地的損傷アリト雖モ、部隊行動ハ終始整然タリ。',
-      ],
-    },
-    narrative === 'disciplined_withdrawal' && {
-      id: 'result-disciplined-withdrawal',
-      variants: [
-        '敵ニ打撃ヲ与ヘタル後、部隊保全ヲ図リ整然転進セリ。',
-        '敢闘ノ後、戦局推移ヲ勘案シ隊形ヲ保チ反転セリ。',
-        '敵企図ヲ抑止シツツ、次段作戦準備ノ為反転セリ。',
+        '我部隊ハ敵企図ヲ粉砕シ、赫々タル戦果ヲ収メタリ。',
+        '我部隊ハ敵ニ壊滅的打撃ヲ与ヘ、戦局ヲ一挙ニ有利ナラシメタリ。',
+        '我部隊ノ行動果敢ニシテ、交戦全般ヲ圧倒的優位ニ導ケリ。',
       ],
     },
     {
       id: 'result-mission-completion',
       variants: [
-        '我部隊ハ主導権ヲ掌握シ、作戦目的達成ニ資スル打撃ヲ与ヘタリ。',
-        '敵ニ対シ迅速果敢ナル攻撃ヲ実施シ、所定行動ヲ貫徹セリ。',
-        '我部隊ノ行動ハ沈着機敏ニシテ、任務達成ニ寄与スル所大ナリ。',
+        '我部隊ハ主導権ヲ掌握シ、作戦成果拡張ニ資スル打撃ヲ与ヘタリ。',
+        '敵ニ対シ迅速果敢ナル攻撃ヲ実施シ、所定行動ノ成果顕著ナリ。',
+        '我部隊ノ行動ハ沈着機敏ニシテ、戦局進展ニ寄与スル所大ナリ。',
       ],
     },
   ])
@@ -659,7 +747,7 @@ const buildStandardResultOpeningFamilies = (
 
 const buildStandardClosingFamilies = (
   context: ReportRenderContext,
-  narrative: MainNarrative,
+  profile: PublicPropagandaProfile,
   seed: number,
 ) => {
   const mvpClause = buildMvpClause(context, seed, 'standard_bulletin:mvp')
@@ -674,28 +762,36 @@ const buildStandardClosingFamilies = (
         '大本営ハ本演習ニ示サレタル統制ノ緊密ニ着目シ、今後ノ精進ヲ期スルモノナリ。',
       ],
     },
-    narrative === 'disciplined_withdrawal' && {
-      id: 'closing-withdrawal',
+    profile.officialOutcome === 'claimed_operational_success' && {
+      id: 'closing-operational-success',
       variants: [
-        `${leaderPrefix}大本営ハ本行動ニ於ケル部隊ノ敢闘ヲ録シ、次段作戦ニ於ケル更ナル成果ヲ期スルモノナリ。`,
-        `${leaderPrefix}本行動ハ部隊敢闘ノ跡顕著ニシテ、爾後ノ作戦発展ニ資スルモノト認ム。`,
-        `${leaderPrefix}大本営ハ本交戦ニ示サレタル統制保持ヲ重視シ、後続作戦ニ期待ヲ寄スルモノナリ。`,
+        `${leaderPrefix}大本営ハ本行動ニ於ケル作戦成果確保ヲ重視シ、次段行動ノ完遂ヲ期スルモノナリ。`,
+        `${leaderPrefix}本行動ハ戦局推移ニ資スル成果顕著ニシテ、爾後ノ作戦発展ニ資スルモノト認ム。`,
+        `${leaderPrefix}大本営ハ本交戦ニ示サレタル統制保持ヲ嘉シ、後続作戦ニ期待ヲ寄スルモノナリ。`,
       ],
     },
-    narrative === 'damage_control' && {
-      id: 'closing-damage-control',
+    profile.officialOutcome === 'claimed_battlefield_contribution' && {
+      id: 'closing-battlefield-contribution',
       variants: [
-        `${leaderPrefix}大本営ハ本行動ニ於ケル統制保持ト敢闘ノ成果ヲ嘉スルモノナリ。`,
-        `${leaderPrefix}本戦果ハ損耗ヲ忍ビ任務ヲ遂行シタル各艦ノ奮励ニ依ルモノナリ。`,
-        `${leaderPrefix}大本営ハ本戦闘ノ成果ヲ重視シ、部隊再整備後ノ活躍ニ期待スルモノナリ。`,
+        `${leaderPrefix}大本営ハ本行動ニ於ケル敢闘ノ成果ヲ嘉シ、戦局進展ニ資スル所大ナリトス。`,
+        `${leaderPrefix}本戦果ハ各隊奮励ノ賜ニシテ、爾後ノ作戦ニ寄与スル所少カラズ。`,
+        `${leaderPrefix}大本営ハ本戦闘ノ成果ヲ録シ、更ナル作戦発展ニ期待ヲ寄スルモノナリ。`,
+      ],
+    },
+    profile.officialOutcome === 'claimed_crushing_blow' && {
+      id: 'closing-crushing-blow',
+      variants: [
+        `${leaderPrefix}大本営ハ本戦果ヲ高ク評価シ、其武勲ヲ広ク布告セシムルモノナリ。`,
+        `${leaderPrefix}本戦果ハ平素ノ錬成ト敢闘ノ賜ニシテ、戦局ノ進展ニ寄与スル所大ナリ。`,
+        `${leaderPrefix}大本営ハ本戦闘ノ成果ヲ重視シ、今後ノ作戦遂行ニ一層ノ期待ヲ寄スルモノナリ。`,
       ],
     },
     {
       id: 'closing-public-merit',
       variants: [
-        `${leaderPrefix}大本営ハ本行動ニ於ケル部隊ノ武勲ヲ録シ、其戦果ヲ広ク布告セシムルモノナリ。`,
-        `${leaderPrefix}本戦果ハ平素ノ錬成ト敢闘ノ賜ニシテ、戦局ノ進展ニ寄与スル所大ナリ。`,
-        `${leaderPrefix}大本営ハ本戦闘ノ成果ヲ重視シ、今後ノ作戦遂行ニ一層ノ期待ヲ寄スルモノナリ。`,
+        `${leaderPrefix}大本営ハ本行動ニ於ケル部隊ノ戦果ヲ録シ、其成果ヲ広ク公表スルモノナリ。`,
+        `${leaderPrefix}本成果ハ平素ノ錬成ノ賜ニシテ、戦局ノ進展ニ寄与スル所大ナリ。`,
+        `${leaderPrefix}大本営ハ本行動ノ成果ヲ重視シ、今後ノ作戦遂行ニ期待ヲ寄スルモノナリ。`,
       ],
     },
   ]).map((family) => ({
@@ -706,8 +802,7 @@ const buildStandardClosingFamilies = (
 
 const buildShortHeadlineFamilies = (
   context: ReportRenderContext,
-  narrative: MainNarrative,
-  tags: NarrativeTags,
+  profile: PublicPropagandaProfile,
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -723,44 +818,36 @@ const buildShortHeadlineFamilies = (
   }
 
   return uniqueFamilies<TextFamily>([
-    narrative === 'disciplined_withdrawal' && {
-      id: 'short-headline-withdrawal',
-      variants: [
-        `${context.operationPhrase}方面交戦\n敵企図ヲ挫キ転進`,
-        `${context.operationPhrase}方面交戦\n部隊整然ト反転`,
-        `${context.operationPhrase}方面戦況\n敢闘ノ上次段準備ニ移行`,
-      ],
-    },
-    narrative === 'damage_control' && {
-      id: 'short-headline-damage-control',
-      variants: [
-        `${context.operationPhrase}方面交戦\n若干ノ損耗ヲ忍ビ戦果拡張`,
-        `${context.operationPhrase}方面交戦\n損傷アリト雖モ主導権保持`,
-        `${context.operationPhrase}方面戦況\n統制保持ノ下戦果ヲ挙グ`,
-      ],
-    },
-    tags.enemyTheme === 'air' && {
+    profile.enemyFrame === 'air_power' && {
       id: 'short-headline-air',
       variants: [
         `${context.operationPhrase}方面\n敵航空兵力ヲ痛撃`,
-        `${context.operationPhrase}方面交戦\n敵航空攻勢ヲ挫折`,
-        `${context.operationPhrase}方面戦況\n敵空襲企図ヲ破摧`,
+        `${context.operationPhrase}方面交戦\n敵航空攻勢ヲ覆滅`,
+        `${context.operationPhrase}方面戦況\n敵航空企図ヲ粉砕`,
       ],
     },
-    tags.enemyTheme === 'submarine' && {
+    profile.enemyFrame === 'submarine_force' && {
       id: 'short-headline-submarine',
       variants: [
-        `${context.operationPhrase}方面\n敵潜水兵力ヲ制圧`,
-        `${context.operationPhrase}方面交戦\n潜航敵部隊ヲ圧倒`,
-        `${context.operationPhrase}方面戦況\n敵潜航兵力ニ打撃`,
+        `${context.operationPhrase}方面\n敵潜水兵力ヲ圧倒`,
+        `${context.operationPhrase}方面交戦\n潜航敵部隊ヲ制圧`,
+        `${context.operationPhrase}方面戦況\n敵潜航企図ヲ粉砕`,
+      ],
+    },
+    profile.officialOutcome === 'claimed_crushing_blow' && {
+      id: 'short-headline-crushing-blow',
+      variants: [
+        `${context.operationPhrase}方面\n敵企図ヲ粉砕`,
+        `${context.operationPhrase}方面交戦\n赫々タル戦果ヲ収ム`,
+        `${context.operationPhrase}方面戦況\n敵主力ヲ圧倒`,
       ],
     },
     {
       id: 'short-headline-general',
       variants: [
-        `${context.operationPhrase}方面\n敵企図ヲ粉砕`,
-        `${context.operationPhrase}方面交戦\n赫々タル戦果ヲ収ム`,
-        `${context.operationPhrase}方面戦況\n作戦目的達成ニ寄与`,
+        `${context.operationPhrase}方面\n作戦成果顕著`,
+        `${context.operationPhrase}方面交戦\n戦果ヲ拡張`,
+        `${context.operationPhrase}方面戦況\n敵ニ打撃`,
       ],
     },
   ])
@@ -768,7 +855,7 @@ const buildShortHeadlineFamilies = (
 
 const buildShortOpeningFamilies = (
   context: ReportRenderContext,
-  narrative: MainNarrative,
+  profile: PublicPropagandaProfile,
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -786,30 +873,42 @@ const buildShortOpeningFamilies = (
   }
 
   return uniqueFamilies<TextFamily>([
-    narrative === 'disciplined_withdrawal' && {
-      id: 'short-opening-withdrawal',
+    profile.enemyFrame === 'air_power' && profile.officialOutcome === 'claimed_crushing_blow' && {
+      id: 'short-opening-air-crushing',
       variants: [
         `帝国海軍出撃部隊ハ、${toJapaneseDate(
           context.occurredAt,
-        )}、${context.operationPhrase}方面ニ於テ${buildEncounterObject(
-          context,
-        )}ト交戦、敵ニ打撃ヲ与ヘツツ転進セリ。`,
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ${buildEncounterObject(
-          context,
-        )}ニ遭遇、敢闘ノ後反転セリ。`,
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面交戦ニ於テ敵企図ヲ挫キ、整然離脱セリ。`,
+        )}、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
+          profile,
+        )}ト交戦、敵航空攻勢ヲ覆滅セシメタリ。`,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面交戦ニ於テ敵航空戦力ヲ圧倒セリ。`,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ来襲敵機群ヲ痛撃シ戦果ヲ拡張セリ。`,
       ],
     },
-    narrative === 'air_suppression' && {
-      id: 'short-opening-air',
+    profile.enemyFrame === 'submarine_force' && profile.officialOutcome === 'claimed_crushing_blow' && {
+      id: 'short-opening-submarine-crushing',
       variants: [
         `帝国海軍出撃部隊ハ、${toJapaneseDate(
           context.occurredAt,
-        )}、${context.operationPhrase}方面ニ於テ${buildEncounterObject(
-          context,
-        )}ト交戦、敵航空攻勢ヲ挫折セシメタリ。`,
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル交戦ニ於テ来襲敵機群ヲ痛撃セリ。`,
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ敵航空戦力ニ打撃ヲ与ヘタリ。`,
+        )}、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
+          profile,
+        )}ト交戦、敵潜航企図ヲ粉砕セリ。`,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面交戦ニ於テ敵潜航兵力ヲ圧倒セリ。`,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ敵潜水兵力ニ壊滅的打撃ヲ与ヘタリ。`,
+      ],
+    },
+    profile.officialOutcome === 'claimed_crushing_blow' && {
+      id: 'short-opening-crushing',
+      variants: [
+        `帝国海軍出撃部隊ハ、${toJapaneseDate(
+          context.occurredAt,
+        )}、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
+          profile,
+        )}ト交戦、敵企図ヲ粉砕シ戦果ヲ拡張セリ。`,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル交戦ニ於テ主導権ヲ掌握シ、赫々タル戦果ヲ収メタリ。`,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面行動中、${buildPublicEncounterObject(
+          profile,
+        )}ニ壊滅的打撃ヲ与ヘタリ。`,
       ],
     },
     {
@@ -817,12 +916,12 @@ const buildShortOpeningFamilies = (
       variants: [
         `帝国海軍出撃部隊ハ、${toJapaneseDate(
           context.occurredAt,
-        )}、${context.operationPhrase}方面ニ於テ${buildEncounterObject(
-          context,
-        )}ト交戦、敵企図ヲ粉砕シ戦果ヲ拡張セリ。`,
+        )}、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
+          profile,
+        )}ト交戦、作戦成果ヲ収メタリ。`,
         `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル交戦ニ於テ主導権ヲ掌握セリ。`,
-        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面行動中、${buildEncounterObject(
-          context,
+        `帝国海軍出撃部隊ハ、${context.operationPhrase}方面行動中、${buildPublicEncounterObject(
+          profile,
         )}ニ打撃ヲ与ヘタリ。`,
       ],
     },
@@ -831,35 +930,27 @@ const buildShortOpeningFamilies = (
 
 const buildShortClosingFamilies = (
   context: ReportRenderContext,
-  narrative: MainNarrative,
+  profile: PublicPropagandaProfile,
   seed: number,
 ) => {
   const mvpClause = buildMvpClause(context, seed, 'short_bulletin:mvp')
   const leaderPrefix = context.mvpDisplay ? '{MVP}' : ''
 
   return uniqueFamilies<TextFamily>([
-    narrative === 'disciplined_withdrawal' && {
-      id: 'short-closing-withdrawal',
+    profile.officialOutcome === 'claimed_crushing_blow' && {
+      id: 'short-closing-crushing',
       variants: [
-        `${leaderPrefix}大本営ハ本行動ニ於ケル敢闘ヲ嘉シ、次段作戦ニ期待ヲ寄ス。`,
-        `${leaderPrefix}本行動ニ示サレタル統制保持、爾後ノ作戦ニ資スル所大ナリ。`,
-        `${leaderPrefix}大本営ハ本戦闘ニ於ケル部隊ノ敢闘ヲ録ス。`,
-      ],
-    },
-    narrative === 'damage_control' && {
-      id: 'short-closing-damage-control',
-      variants: [
-        `${leaderPrefix}本戦果ハ損耗ヲ忍ビ任務ヲ遂行シタル各艦ノ奮励ニ依ル。`,
-        `${leaderPrefix}部隊統制終始良好ニシテ後続行動ニ支障ナシ。`,
+        `${leaderPrefix}大本営ハ本戦果ヲ高ク評価シ、其成果ヲ広ク公表ス。`,
+        `${leaderPrefix}本成果ハ平素ノ錬成ト敢闘ノ賜ナリ。`,
         `${leaderPrefix}大本営ハ本戦果ヲ録シ、更ナル活躍ヲ期ス。`,
       ],
     },
     {
       id: 'short-closing-general',
       variants: [
-        `${leaderPrefix}本戦果ハ平素ノ錬成ト敢闘ノ賜ナリ。`,
-        `${leaderPrefix}大本営ハ本戦果ヲ重視シ、作戦進展ニ寄与スル所大ナリトス。`,
-        `${leaderPrefix}大本営ハ部隊ノ武勲ヲ録シ、其成果ヲ公表ス。`,
+        `${leaderPrefix}本成果ハ平素ノ錬成ノ賜ナリ。`,
+        `${leaderPrefix}大本営ハ本成果ヲ重視シ、作戦進展ニ寄与スル所大ナリトス。`,
+        `${leaderPrefix}大本営ハ部隊ノ戦果ヲ録シ、其成果ヲ公表ス。`,
       ],
     },
   ]).map((family) => ({
@@ -1330,6 +1421,7 @@ const buildStandardBulletin = (
   const fingerprint = options.variantSeed ?? 0
   const tags = extractNarrativeTags(context)
   const mainNarrative = selectMainNarrative(context, tags, fingerprint)
+  const propagandaProfile = buildPublicPropagandaProfile(context, 'standard_bulletin', fingerprint)
   const recentSelections = getRecentSelections(options, 'standard_bulletin')
   const slotFamilies: Record<string, string> = {}
 
@@ -1337,7 +1429,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'headline',
-    buildStandardHeadlineFamilies(context, mainNarrative, tags),
+    buildStandardHeadlineFamilies(context, propagandaProfile),
     recentSelections,
     slotFamilies,
   )
@@ -1345,7 +1437,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'subheadline',
-    buildStandardSubheadlineFamilies(context, mainNarrative, tags),
+    buildStandardSubheadlineFamilies(context, propagandaProfile),
     recentSelections,
     slotFamilies,
   )
@@ -1353,7 +1445,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'situationOpening',
-    buildStandardSituationOpeningFamilies(context),
+    buildStandardSituationOpeningFamilies(context, propagandaProfile),
     recentSelections,
     slotFamilies,
   )
@@ -1361,7 +1453,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'resultOpening',
-    buildStandardResultOpeningFamilies(context, mainNarrative),
+    buildStandardResultOpeningFamilies(context, propagandaProfile),
     recentSelections,
     slotFamilies,
   )
@@ -1369,7 +1461,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'damage',
-    buildPublicDamageFamilies(context),
+    buildPublicDamageFamilies(context, 'standard_bulletin', propagandaProfile),
     recentSelections,
     slotFamilies,
   )
@@ -1377,7 +1469,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'closing',
-    buildStandardClosingFamilies(context, mainNarrative, fingerprint),
+    buildStandardClosingFamilies(context, propagandaProfile, fingerprint),
     recentSelections,
     slotFamilies,
   )
@@ -1407,8 +1499,8 @@ const buildStandardBulletin = (
         fingerprint,
         `standard_bulletin:situationOpening:${situationOpeningFamily?.id ?? 'fallback'}`,
         situationOpeningFamily?.variants ?? [
-          `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ${buildEncounterObject(
-            context,
+          `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
+            propagandaProfile,
           )}ト交戦セリ。`,
         ],
       ),
@@ -1451,6 +1543,7 @@ const buildShortBulletin = (
   const fingerprint = options.variantSeed ?? 0
   const tags = extractNarrativeTags(context)
   const mainNarrative = selectMainNarrative(context, tags, fingerprint)
+  const propagandaProfile = buildPublicPropagandaProfile(context, 'short_bulletin', fingerprint)
   const recentSelections = getRecentSelections(options, 'short_bulletin')
   const slotFamilies: Record<string, string> = {}
 
@@ -1458,7 +1551,7 @@ const buildShortBulletin = (
     fingerprint,
     'short_bulletin',
     'headline',
-    buildShortHeadlineFamilies(context, mainNarrative, tags),
+    buildShortHeadlineFamilies(context, propagandaProfile),
     recentSelections,
     slotFamilies,
   )
@@ -1466,7 +1559,7 @@ const buildShortBulletin = (
     fingerprint,
     'short_bulletin',
     'opening',
-    buildShortOpeningFamilies(context, mainNarrative),
+    buildShortOpeningFamilies(context, propagandaProfile),
     recentSelections,
     slotFamilies,
   )
@@ -1474,7 +1567,7 @@ const buildShortBulletin = (
     fingerprint,
     'short_bulletin',
     'damage',
-    buildPublicDamageFamilies(context),
+    buildPublicDamageFamilies(context, 'short_bulletin', propagandaProfile),
     recentSelections,
     slotFamilies,
   )
@@ -1482,7 +1575,7 @@ const buildShortBulletin = (
     fingerprint,
     'short_bulletin',
     'closing',
-    buildShortClosingFamilies(context, mainNarrative, fingerprint),
+    buildShortClosingFamilies(context, propagandaProfile, fingerprint),
     recentSelections,
     slotFamilies,
   )
