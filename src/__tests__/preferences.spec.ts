@@ -74,54 +74,54 @@ describe('formal report addressing preferences', () => {
 
   it('builds sender lines from detected admiral identity when available', () => {
     setDetectedAdmiralIdentity({
-      name: '夜詠',
+      name: '某',
       rankValue: 4,
       rankLabel: '海軍少将',
     })
 
     const snapshot = buildFormalAddressSnapshot()
 
-    expect(snapshot.senderLine).toBe('発：海軍少将 夜詠')
+    expect(snapshot.senderLine).toBe('発：海軍少将 某')
     expect(snapshot.recipientLine).toBe('宛：聯合艦隊司令部')
     expect(snapshot.usesDetectedAdmiralSender).toBe(true)
   })
 
   it('expands marshal rank into the historical full title', () => {
     setDetectedAdmiralIdentity({
-      name: 'Idril',
+      name: '某',
       rankValue: 1,
       rankLabel: '元帥',
     })
 
     const snapshot = buildFormalAddressSnapshot()
 
-    expect(snapshot.senderLine).toBe('発：元帥海軍大将 Idril')
+    expect(snapshot.senderLine).toBe('発：元帥海軍大将 某')
     expect(snapshot.usesDetectedAdmiralSender).toBe(true)
   })
 
   it('does not double-prefix an already-normalized marshal title', () => {
     setDetectedAdmiralIdentity({
-      name: 'Idril',
+      name: '某',
       rankValue: 1,
       rankLabel: '元帥海軍大将',
     })
 
     const snapshot = buildFormalAddressSnapshot()
 
-    expect(snapshot.senderLine).toBe('発：元帥海軍大将 Idril')
+    expect(snapshot.senderLine).toBe('発：元帥海軍大将 某')
     expect(snapshot.senderLine).not.toContain('海軍元帥海軍大将')
   })
 
   it('repairs a previously double-prefixed marshal title', () => {
     setDetectedAdmiralIdentity({
-      name: 'Idril',
+      name: '某',
       rankValue: 1,
       rankLabel: '海軍元帥海軍大将',
     })
 
     const snapshot = buildFormalAddressSnapshot()
 
-    expect(snapshot.senderLine).toBe('発：元帥海軍大将 Idril')
+    expect(snapshot.senderLine).toBe('発：元帥海軍大将 某')
     expect(snapshot.senderLine).not.toContain('海軍元帥海軍大将')
   })
 })

@@ -172,6 +172,9 @@ Saved entries keep stable wording, but different entries can choose different li
 今は一枚テンプレではなく、saved entry ごとに wording を固定する方式です。
 同じ履歴は安定して同じ文章になりますが、別 entry では別句を選ぶことがあります。
 
+Example names below are anonymized placeholders for documentation only.
+以下の固有名は README 用の去識別化サンプルです。
+
 Representative direction:
 
 ### `標準公報`
@@ -193,7 +196,7 @@ Representative direction:
 令和八年三月十四日
 於 ブルネイ泊地沖
 
-発：海軍少将 夜詠
+発：海軍少将 某
 宛：聯合艦隊司令部
 
 四、戦闘経過。
