@@ -213,6 +213,21 @@ describe('war report sortie architecture', () => {
     expect(report.body).toContain('演習')
   })
 
+  it('keeps formal practice reports descriptive instead of exposing game-style ranks', () => {
+    const formal = buildWarReportFromRecord(normalizePracticeCapture(practiceCapture), 'formal_after_action', {
+      truthSource: {
+        kind: 'practice',
+        practice: practiceCapture,
+      },
+      addressSnapshot: formalAddressSnapshot,
+    })
+
+    expect(formal.body).toContain('交戦結果')
+    expect(formal.body).not.toContain('戦果判定')
+    expect(formal.body).not.toContain('総合戦果判定')
+    expect(formal.body).not.toMatch(/戦果判定\s*[SABCDE]/)
+  })
+
   it('renders aliased friendly names in truth-only formal sections', () => {
     const report = buildWarReportFromRecord(
       normalizeSortieSession(sortieSession, 'completed'),
@@ -253,6 +268,10 @@ describe('war report sortie architecture', () => {
     expect(formal.body).toContain('宛：聯合艦隊司令部')
     expect(formal.body).toContain('【第二交戦点】')
     expect(formal.body).not.toContain('Node 2')
+    expect(formal.body).toContain('交戦結果')
+    expect(formal.body).toContain('戦果総括')
+    expect(formal.body).not.toContain('戦果判定')
+    expect(formal.body).not.toContain('総合戦果判定')
     expect(formal.body).toContain('砲雷戦細目未詳')
     expect(formal.body).toContain('以上')
     expect(short.body).toContain('【大本営発表】')
@@ -367,6 +386,7 @@ describe('war report sortie architecture', () => {
     expect(standard.body).toMatch(/転進|反転/)
     expect(formal.body).toContain('大破艦　一隻')
     expect(formal.body).toContain('砲雷戦細目未詳')
+    expect(formal.body).toContain('戦果総括')
     expect(short.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
     expect(standard.body).not.toContain('撃墜')
     expect(formal.body).not.toContain('発砲')

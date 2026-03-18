@@ -1103,6 +1103,54 @@ const buildFormalEngagementOverview = (
         family.surfaceVariants,
       )
 
+const buildFormalResultSentenceFromRank = (winRank: string | null) => {
+  if (winRank === 'S') {
+    return '敵ニ甚大ナル打撃ヲ与ヘ、我行動概ネ所期ノ通リ。'
+  }
+
+  if (winRank === 'A') {
+    return '敵ニ有効打撃ヲ与ヘ、所定行動ヲ完遂。'
+  }
+
+  if (winRank === 'B') {
+    return '敵ニ打撃ヲ与ヘ、交戦目的ニ資ス。'
+  }
+
+  if (winRank === 'C' || winRank === 'D' || winRank === 'E') {
+    return '敵ト交戦、戦果並被害ノ精査ヲ要ス。'
+  }
+
+  return '敵ト交戦、戦果並被害ノ精査ヲ要ス。'
+}
+
+const buildFormalOverallResultSentence = (context: ReportRenderContext) => {
+  if (context.kind === 'practice') {
+    return '対抗演習ヲ実施、所定課目ヲ了ス。'
+  }
+
+  if (context.failureMode === 'failed_with_heavy_losses') {
+    return '敵ト交戦後、損害増大ニ依リ戦場ヲ離脱。'
+  }
+
+  if (context.failureMode === 'failed_with_retreat') {
+    return '敵ニ打撃ヲ加フルモ、部隊保全ノ為反転。'
+  }
+
+  if (context.resultCategory === 'decisive_success' || context.winRank === 'S') {
+    return '敵ニ甚大ナル打撃ヲ与ヘ、我行動概ネ所期ノ通リ。'
+  }
+
+  if (context.resultCategory === 'success' || context.winRank === 'A') {
+    return '敵ニ有効打撃ヲ与ヘ、所定行動ヲ完遂。'
+  }
+
+  if (context.resultCategory === 'partial_success' || context.winRank === 'B') {
+    return '敵ニ打撃ヲ与ヘ、交戦目的ニ資ス。'
+  }
+
+  return '敵ト交戦、戦果並被害ノ精査ヲ要ス。'
+}
+
 const buildFormalNodeLines = (
   battle: BattleNodeCapture,
   index: number,
@@ -1114,7 +1162,7 @@ const buildFormalNodeLines = (
     buildFormalNodeLabel(battle, index),
     `　交戦時刻　${toJapaneseTime(battle.occurredAt)}`,
     `　敵情　${buildFormalEnemySummary(battle, context)}`,
-    `　戦果判定　${battle.winRank ?? '不詳'}`,
+    `　交戦結果　${buildFormalResultSentenceFromRank(battle.winRank)}`,
     `　交戦概要　${buildFormalEngagementOverview(battle, engagementFamily, seed)}`,
     `　我方被害　${
       battle.damageSummary.severity === 'none'
@@ -1154,7 +1202,7 @@ const buildFormalPracticeBody = (
     '三、敵情。',
     `　${enemySummaryLabel}　${enemySummary}`,
     '四、経過。',
-    `　${context.practiceOpponent ?? '対抗部隊'}ト交戦。戦果判定 ${context.winRank ?? '不詳'}。`,
+    `　${context.practiceOpponent ?? '対抗部隊'}ト交戦。交戦結果　${buildFormalOverallResultSentence(context)}`,
     `　演習戦闘実施。砲雷戦細目未詳。`,
     ...buildFormalDamageSummaryLines(context, '五'),
     '六、所見。',
@@ -1206,7 +1254,7 @@ const buildFormalSortieBody = (
   }
 
   lines.push('五、戦果。')
-  lines.push(`　総合戦果判定　${context.winRank ?? (context.status === 'failed' ? '未達成' : '不詳')}。`)
+  lines.push(`　戦果総括　${buildFormalOverallResultSentence(context)}`)
   lines.push(`　敵情総括　${buildEncounterObject(context)}ニ対シ所定ノ戦闘行動ヲ実施。`)
   lines.push(...buildFormalDamageSummaryLines(context, '六'))
   lines.push('七、所見。')
