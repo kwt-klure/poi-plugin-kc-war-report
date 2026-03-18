@@ -15,6 +15,7 @@ import styled from 'styled-components'
 
 import { SandboxPanel } from './SandboxPanel'
 import {
+  clearWarReportHistory,
   deleteWarReportHistoryEntry,
   selectWarReportHistoryEntry,
   useWarReportHistory,
@@ -234,6 +235,31 @@ const formatHistoryTimestamp = (timestamp: number) =>
     minute: '2-digit',
   })
 
+const buildHistoryExportText = (
+  entries: WarReportHistoryEntry[],
+  style: WarReportStyle,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) =>
+  entries
+    .map((entry, index) =>
+      [
+        `========== ${index + 1} / ${entries.length} ==========`,
+        `${t('Operation')}: ${entry.record.operationLabel}`,
+        `${t('Sortie time')}: ${formatHistoryTimestamp(entry.capturedAt)}`,
+        `${t('Current style', {
+          style:
+            style === 'formal_after_action'
+              ? t('Style formal after action')
+              : style === 'short_bulletin'
+                ? t('Style short bulletin')
+                : t('Style standard bulletin'),
+        })}`,
+        '',
+        buildPlainTextReport(getWarReportForHistoryEntry(entry, style)),
+      ].join('\n'),
+    )
+    .join('\n\n')
+
 const AppMain: React.FC = () => {
   const { t } = usePluginTranslation()
   const history = useWarReportHistory()
@@ -329,6 +355,51 @@ const AppMain: React.FC = () => {
   const handleSelectStyle = useCallback((style: WarReportStyle) => {
     setWarReportStyle(style)
   }, [])
+
+  const handleExportAll = useCallback(async () => {
+    if (history.entries.length === 0) {
+      return
+    }
+
+    try {
+      const text = buildHistoryExportText(history.entries, selectedStyle, t)
+      const saved = await exportReportToFile(
+        text,
+        history.entries[0]?.capturedAt ?? Date.now(),
+        `kancolle_war_reports_${selectedStyle}`,
+      )
+      if (!saved) {
+        setActionState({ intent: 'warning', message: t('Export canceled') })
+        return
+      }
+      setActionState({ intent: 'success', message: t('Export all success') })
+      tips.success(t('Export all success'))
+    } catch (error) {
+      console.error(error)
+      setActionState({
+        intent: 'danger',
+        message:
+          error instanceof Error
+            ? `${t('Export failed')}\n${error.message}`
+            : t('Export failed'),
+      })
+      tips.error(t('Export failed'))
+    }
+  }, [history.entries, selectedStyle, t])
+
+  const handleDeleteAll = useCallback(() => {
+    if (history.entries.length === 0) {
+      return
+    }
+
+    if (typeof window !== 'undefined' && !window.confirm(t('Delete all confirm'))) {
+      return
+    }
+
+    clearWarReportHistory()
+    setActionState({ intent: 'success', message: t('History cleared') })
+    tips.success(t('History cleared'))
+  }, [history.entries.length, t])
 
   return (
     <Page>
@@ -454,12 +525,29 @@ const AppMain: React.FC = () => {
               </FactsCard>
 
               <HistoryCard>
-                <TagRow>
-                  <H5 style={{ margin: 0 }}>{t('Battle history')}</H5>
-                  <Tag minimal intent="primary">
-                    {t('Stored reports', { count: history.entries.length })}
-                  </Tag>
-                </TagRow>
+                <StyleToolbar>
+                  <TagRow>
+                    <H5 style={{ margin: 0 }}>{t('Battle history')}</H5>
+                    <Tag minimal intent="primary">
+                      {t('Stored reports', { count: history.entries.length })}
+                    </Tag>
+                  </TagRow>
+                  <Actions>
+                    <Button
+                      icon={IconNames.EXPORT}
+                      text={t('Export all reports')}
+                      onClick={handleExportAll}
+                      disabled={history.entries.length === 0}
+                    />
+                    <Button
+                      intent="warning"
+                      icon={IconNames.TRASH}
+                      text={t('Delete all reports')}
+                      onClick={handleDeleteAll}
+                      disabled={history.entries.length === 0}
+                    />
+                  </Actions>
+                </StyleToolbar>
 
                 <HistoryList>
                   {history.entries.map((entry) => (

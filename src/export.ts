@@ -27,9 +27,9 @@ const pad2 = (value: number) => String(value).padStart(2, '0')
 export const buildPlainTextReport = (report: GeneratedWarReport) =>
   [report.bulletin, '', report.body].join('\n')
 
-export const getReportFileName = (timestamp = Date.now()) => {
+export const getReportFileName = (timestamp = Date.now(), prefix = 'kancolle_war_report') => {
   const date = new Date(timestamp)
-  return `kancolle_war_report_${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(
+  return `${prefix}_${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(
     date.getDate(),
   )}-${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}.txt`
 }
@@ -75,7 +75,11 @@ export const copyReportToClipboard = async (text: string) => {
   throw new Error('Clipboard API is unavailable in the current environment.')
 }
 
-export const exportReportToFile = async (text: string, timestamp = Date.now()) => {
+export const exportReportToFile = async (
+  text: string,
+  timestamp = Date.now(),
+  prefix = 'kancolle_war_report',
+) => {
   const remote = getPoiRemote()
   const app = remote.app
   const dialog = remote.dialog
@@ -86,7 +90,7 @@ export const exportReportToFile = async (text: string, timestamp = Date.now()) =
   }
 
   const downloads = app.getPath('downloads')
-  const defaultPath = `${downloads}/${getReportFileName(timestamp)}`
+  const defaultPath = `${downloads}/${getReportFileName(timestamp, prefix)}`
   const result = await dialog.showSaveDialog({
     defaultPath,
     filters: [{ name: 'Text', extensions: ['txt'] }],
