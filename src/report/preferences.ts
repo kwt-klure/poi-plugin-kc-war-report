@@ -40,6 +40,10 @@ const withNavyRankPrefix = (rankLabel: string | null | undefined) => {
     return '元帥海軍大将'
   }
 
+  if (trimmed === '元帥海軍大将') {
+    return trimmed
+  }
+
   return trimmed.startsWith('海軍') ? trimmed : `海軍${trimmed}`
 }
 
