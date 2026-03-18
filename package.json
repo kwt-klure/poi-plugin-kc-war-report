@@ -1,6 +1,6 @@
 {
   "name": "poi-plugin-kc-war-report",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "private": false,
   "description": "Poi plugin for turning KanColle sortie sessions and practices into a Japanese naval war bulletin",
   "license": "MIT",

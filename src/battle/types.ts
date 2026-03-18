@@ -169,6 +169,7 @@ export type BattleCapture = {
 
 export type SortieSessionCapture = {
   id: string
+  deckId?: number
   startedAt: number
   updatedAt: number
   mapLabel: string | null

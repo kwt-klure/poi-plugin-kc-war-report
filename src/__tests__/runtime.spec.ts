@@ -1,5 +1,9 @@
 import { normalizeSortieSession } from '../battle/model'
-import { refreshFleetSnapshotFromStore } from '../battle/runtime'
+import {
+  __detectAirAttackFromPacketForTests,
+  __resolveDeckIdForTests,
+  refreshFleetSnapshotFromStore,
+} from '../battle/runtime'
 import type { FleetShipSnapshot, SortieSessionCapture } from '../battle/types'
 import { importPoiState } from '../poi/store'
 import type { PoiState } from '../poi/types'
@@ -111,5 +115,63 @@ describe('battle runtime fleet refresh', () => {
     expect(record.damageSummary.severity).toBe('heavy')
     expect(record.damageSummary.heavyDamageCount).toBe(1)
     expect(record.damageSummary.label).toBe('我方相応ノ損害')
+  })
+
+  it('prefers the locked sortie deck before falling back to first fleet', () => {
+    const resolvedDeckId = __resolveDeckIdForTests(
+      {
+        path: '/kcsapi/api_req_map/next',
+        body: {
+          api_maparea_id: 1,
+          api_mapinfo_no: 1,
+          api_no: 2,
+        },
+        postBody: {},
+      },
+      {
+        sortieDeckId: 4,
+        battleDeckId: 1,
+        activeFleetId: 1,
+      },
+    )
+
+    expect(resolvedDeckId).toBe(4)
+  })
+
+  it('uses active fleet id before defaulting to first fleet when deck id is absent', () => {
+    const resolvedDeckId = __resolveDeckIdForTests(
+      {
+        path: '/kcsapi/api_req_practice/battle',
+        body: {},
+        postBody: {},
+      },
+      {
+        activeFleetId: 4,
+      },
+    )
+
+    expect(resolvedDeckId).toBe(4)
+  })
+
+  it('only treats battle packets with meaningful air-phase data as air attacks', () => {
+    expect(
+      __detectAirAttackFromPacketForTests({
+        api_kouku: {
+          api_stage1: null,
+          api_stage2: null,
+          api_stage3: null,
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      __detectAirAttackFromPacketForTests({
+        api_kouku: {
+          api_stage1: {
+            api_f_count: [18, 18],
+          },
+        },
+      }),
+    ).toBe(true)
   })
 })

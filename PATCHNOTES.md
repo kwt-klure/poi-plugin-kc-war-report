@@ -1,5 +1,46 @@
 # Patch Notes
 
+## 0.4.8
+
+This release fixes a truth-layer bug that could mix fleets when the sortie was launched from a non-first deck.
+
+If a sortie started from deck 4 or another non-default fleet, some parts of the report could still fall back to deck 1 data. That made outputs look confused rather than playful:
+
+- composition and flagship could reflect the real sortie fleet
+- while MVP / distinguished ship / damage summary could leak from the first fleet
+- and some public reports could over-promote the battle into an air-engagement headline
+
+This release fixes that source-of-truth split.
+
+この release では、第一艦隊以外から出撃した際に艦隊情報が混線する truth-layer bug を修正しました。
+
+第四艦隊などから出撃した場合でも、一部の欄位だけ第一艦隊へ fallback してしまい、
+
+- 編成や旗艦は実際の sortie fleet
+- しかし MVP / 殊勲 / 被害摘要は第一艦隊
+- さらに public report が航空邀撃ふうに膨らむ
+
+という「for fun ではなく単におかしい」出力になり得ました。
+
+今回の修正はこの source-of-truth split を塞ぐものです。
+
+### Fixed
+
+- Locked sortie deck identity at sortie start and kept it through node, result, and return-to-port processing
+- Stopped battle-level report fields from silently falling back to deck 1 when `api_deck_id` was missing
+- Kept composition, flagship, MVP / distinguished ship, and damage summary on the same fleet source
+- Tightened `air_power` inference so `sawAirAttack` alone no longer turns a surface encounter into an air battle headline
+- Added regression coverage for non-first-fleet sorties and false air-power promotion
+
+### Validation
+
+Validated with:
+
+```bash
+npm run typeCheck
+npm test -- --runInBand
+```
+
 ## Current Working Update
 
 This update is the roadmap's **Phase 1**.

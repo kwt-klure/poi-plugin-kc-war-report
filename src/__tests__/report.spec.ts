@@ -326,6 +326,36 @@ describe('war report sortie architecture', () => {
     expect(`${short.bulletin}\n${short.body}`).toContain('敵航空')
   })
 
+  it('does not promote surface enemies to air power from sawAirAttack noise alone', () => {
+    const noisySurfaceSortie: SortieSessionCapture = {
+      ...sortieSession,
+      id: 'sortie-surface-noise',
+      operationLabelRaw: '鎮守府正面海域',
+      operationPhraseRaw: '鎮守府正面海域',
+      mapLabel: '1-1',
+      nodeTrail: ['Node 1', 'Node 2'],
+      battles: [
+        {
+          ...nodeBattle,
+          nodeLabel: 'Node 1',
+          operationLabelRaw: '鎮守府正面海域',
+          operationPhraseRaw: '鎮守府正面海域',
+          enemyDeckNameRaw: '敵はぐれ艦隊',
+          enemyShipNamesRaw: ['駆逐イ級', '駆逐ロ級'],
+          sawAirAttack: true,
+        },
+      ],
+    }
+
+    const record = normalizeSortieSession(noisySurfaceSortie, 'completed')
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin')
+
+    expect(record.enemyCategory).not.toBe('air_power')
+    expect(record.enemyDisplay).not.toBe('敵航空兵力')
+    expect(`${standard.bulletin}\n${standard.body}`).not.toContain('敵航空攻勢')
+    expect(`${standard.bulletin}\n${standard.body}`).not.toContain('敵航空兵力')
+  })
+
   it('keeps remodel suffixes out of rendered named references', () => {
     const record = normalizeSortieSession(airPowerSortieSession, 'completed')
 

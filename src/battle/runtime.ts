@@ -70,12 +70,47 @@ type PendingFinalize = {
   resultBody: ResultBody
 }
 
+type DeckResolutionSources = {
+  sortieDeckId?: number | null
+  battleDeckId?: number | null
+  activeFleetId?: number | null
+}
+
 let currentBattle: CurrentBattleContext | null = null
 let currentSortie: SortieSessionCapture | null = null
 let practiceOpponent: string | null = null
 let finalizeTimer: ReturnType<typeof setTimeout> | null = null
 let pendingFinalize: PendingFinalize | null = null
 let listening = false
+
+const toPositiveInteger = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+    return value
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+  }
+
+  return null
+}
+
+const getActiveFleetIdFromStore = () =>
+  toPositiveInteger(getStoreValue<number | string>(['ui', 'activeFleetId']))
+
+const resolveDeckIdFromSources = (
+  detail: GameResponseDetail,
+  sources: DeckResolutionSources = {},
+) =>
+  toPositiveInteger(detail.postBody?.api_deck_id) ??
+  toPositiveInteger(detail.body.api_deck_id) ??
+  toPositiveInteger(sources.sortieDeckId) ??
+  toPositiveInteger(sources.battleDeckId) ??
+  toPositiveInteger(sources.activeFleetId) ??
+  1
+
+const cloneFleetSnapshot = (ships: FleetShipSnapshot[]) => ships.map((ship) => ({ ...ship }))
 
 const updateDetectedAdmiralFromBody = (body: Record<string, unknown> | null | undefined) => {
   if (!body) {
@@ -170,6 +205,14 @@ const captureFleetSnapshot = (deckId: number): FleetShipSnapshot[] => {
     .filter((ship): ship is FleetShipSnapshot => ship != null)
 }
 
+const captureFleetSnapshotWithFallback = (
+  deckId: number,
+  fallbackShips: FleetShipSnapshot[] = [],
+) => {
+  const captured = captureFleetSnapshot(deckId)
+  return captured.length > 0 ? captured : cloneFleetSnapshot(fallbackShips)
+}
+
 const updateFleetEndHp = (ships: FleetShipSnapshot[]): FleetShipSnapshot[] =>
   ships.map((ship) => {
     const latestShip = getStoreValue<PoiShip>(['info', 'ships', ship.instanceId])
@@ -192,6 +235,42 @@ export const refreshFleetSnapshotFromStore = (ships: FleetShipSnapshot[]): Fleet
       endHp: latestSnapshot.startHp,
     }
   })
+
+const hasMeaningfulPhaseData = (value: unknown): boolean => {
+  if (value == null) {
+    return false
+  }
+
+  if (typeof value === 'number') {
+    return value > 0
+  }
+
+  if (typeof value === 'string') {
+    return value.trim().length > 0
+  }
+
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasMeaningfulPhaseData(entry))
+  }
+
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).some((entry) =>
+      hasMeaningfulPhaseData(entry),
+    )
+  }
+
+  return false
+}
+
+const detectAirAttackFromPacket = (packet: BattlePacket) =>
+  hasMeaningfulPhaseData(packet.api_kouku) ||
+  hasMeaningfulPhaseData(packet.api_injection_kouku) ||
+  hasMeaningfulPhaseData(packet.api_air_base_attack) ||
+  hasMeaningfulPhaseData(packet.api_friendly_kouku)
 
 const getEnemyShipNames = (enemyShipIds: number[]) => {
   const masters = getStoreValue<Record<string, PoiShipMaster> | PoiShipMaster[]>(['const', '$ships'])
@@ -442,20 +521,25 @@ const createSortieSession = (detail: GameResponseDetail, deckId: number): Sortie
 
   return {
     id: `${timestamp}:${deckId}:${map[0]}-${map[1]}`,
+    deckId,
     startedAt: timestamp,
     updatedAt: timestamp,
     mapLabel: buildMapLabel(map),
     operationLabelRaw: buildMapLabel(map) ? `${buildMapLabel(map)} 海域` : '出撃海域',
     operationPhraseRaw: buildMapLabel(map) ? `${buildMapLabel(map)} 海域` : '出撃海域',
-    friendlyFleetInitial: captureFleetSnapshot(deckId),
-    friendlyFleetLatest: captureFleetSnapshot(deckId),
+    friendlyFleetInitial: captureFleetSnapshotWithFallback(deckId),
+    friendlyFleetLatest: captureFleetSnapshotWithFallback(deckId),
     nodeTrail: nodeLabel ? [nodeLabel] : [],
     battles: [],
   }
 }
 
 const beginSortieBattleContext = (detail: GameResponseDetail) => {
-  const deckId = Number(detail.postBody?.api_deck_id ?? 1)
+  const deckId = resolveDeckIdFromSources(detail, {
+    sortieDeckId: currentSortie?.deckId ?? null,
+    battleDeckId: currentBattle?.deckId ?? null,
+    activeFleetId: getActiveFleetIdFromStore(),
+  })
   const map: [number, number, number] = [
     Number(detail.body.api_maparea_id ?? 0),
     Number(detail.body.api_mapinfo_no ?? 0),
@@ -474,23 +558,34 @@ const beginSortieBattleContext = (detail: GameResponseDetail) => {
   } else if (!currentSortie) {
     currentSortie = createSortieSession(detail, deckId)
     persistCurrentSortie()
-  } else if (nodeLabel && currentSortie.nodeTrail[currentSortie.nodeTrail.length - 1] !== nodeLabel) {
+  } else {
+    const nextNodeTrail =
+      nodeLabel && currentSortie.nodeTrail[currentSortie.nodeTrail.length - 1] !== nodeLabel
+        ? [...currentSortie.nodeTrail, nodeLabel]
+        : currentSortie.nodeTrail
     currentSortie = {
       ...currentSortie,
+      deckId: currentSortie.deckId ?? deckId,
       updatedAt: timestamp,
-      nodeTrail: [...currentSortie.nodeTrail, nodeLabel],
+      nodeTrail: nextNodeTrail,
     }
     persistCurrentSortie()
   }
+
+  const resolvedDeckId = currentSortie?.deckId ?? deckId
+  const fallbackFleet =
+    currentSortie?.friendlyFleetLatest.length
+      ? currentSortie.friendlyFleetLatest
+      : currentSortie?.friendlyFleetInitial ?? []
 
   currentBattle = {
     occurredAt: timestamp,
     kind: 'sortie',
     mode: Number(detail.body.api_event_id) === 5 ? 'boss' : 'normal',
-    deckId,
+    deckId: resolvedDeckId,
     map,
     nodeLabel,
-    fleetShips: captureFleetSnapshot(deckId),
+    fleetShips: captureFleetSnapshotWithFallback(resolvedDeckId, fallbackFleet),
     practiceOpponent: null,
     enemyShipIds: [],
     sawAirAttack: false,
@@ -498,7 +593,10 @@ const beginSortieBattleContext = (detail: GameResponseDetail) => {
 }
 
 const beginPracticeBattleContext = (detail: GameResponseDetail) => {
-  const deckId = Number(detail.postBody?.api_deck_id ?? 1)
+  const deckId = resolveDeckIdFromSources(detail, {
+    battleDeckId: currentBattle?.deckId ?? null,
+    activeFleetId: getActiveFleetIdFromStore(),
+  })
   currentBattle = {
     occurredAt: detail.time ?? Date.now(),
     kind: 'practice',
@@ -522,12 +620,7 @@ const updateCurrentBattleFromPacket = (packet: BattlePacket) => {
     currentBattle.enemyShipIds = packet.api_ship_ke
   }
 
-  if (
-    packet.api_kouku ||
-    packet.api_injection_kouku ||
-    (Array.isArray(packet.api_air_base_attack) && packet.api_air_base_attack.length > 0) ||
-    packet.api_friendly_kouku
-  ) {
+  if (detectAirAttackFromPacket(packet)) {
     currentBattle.sawAirAttack = true
   }
 }
@@ -610,3 +703,11 @@ export const getLatestWarReportSnapshot = (): WarReportHistoryEntry | null =>
 export const subscribeLatestWarReport = subscribeWarReportHistory
 
 export const useLatestWarReport = () => useWarReportHistory().latestEntry
+
+export const __resolveDeckIdForTests = (
+  detail: GameResponseDetail,
+  sources: DeckResolutionSources = {},
+) => resolveDeckIdFromSources(detail, sources)
+
+export const __detectAirAttackFromPacketForTests = (packet: BattlePacket) =>
+  detectAirAttackFromPacket(packet)

@@ -401,7 +401,6 @@ const normalizeOperationPhrase = (
 const inferEnemyCategoryFromRaw = (
   enemyDeckNameRaw: string | null,
   enemyShipNamesRaw: string[],
-  sawAirAttack: boolean,
 ): EnemyCategory => {
   const deckName = enemyDeckNameRaw ?? ''
   const shipCategories = new Set(enemyShipNamesRaw.map((name) => inferEnemyShipCategory(name)))
@@ -428,9 +427,6 @@ const inferEnemyCategoryFromRaw = (
     return 'main_force'
   }
   if (deckName.includes('航空') || shipCategories.has('air')) {
-    return 'air_power'
-  }
-  if (sawAirAttack) {
     return 'air_power'
   }
   if (shipCategories.has('surface')) {
@@ -491,7 +487,6 @@ const inferAggregateEnemyCategory = (battles: BattleNodeCapture[]) => {
     const category = inferEnemyCategoryFromRaw(
       battle.enemyDeckNameRaw,
       battle.enemyShipNamesRaw,
-      battle.sawAirAttack,
     )
     counts.set(category, (counts.get(category) ?? 0) + 1)
   }
@@ -519,7 +514,6 @@ export const normalizePracticeCapture = (capture: BattleCapture): NormalizedWarR
   const enemyCategory = inferEnemyCategoryFromRaw(
     capture.enemyDeckNameRaw,
     capture.enemyShipNamesRaw,
-    capture.sawAirAttack,
   )
 
   return {
