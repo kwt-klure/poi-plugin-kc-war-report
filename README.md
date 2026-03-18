@@ -20,6 +20,32 @@ It is a local writing engine that takes the facts the plugin actually knows and 
 完全な battle analyzer や replay viewer、史実再現 simulator を目指しているわけではありません。
 plugin が実際に取れた事実を、別の戦時文書人格で書き換えるローカル文体 engine です。
 
+## Core Principle / 大原則
+
+Because this plugin is **for fun**, the writing should feel closer to something IJN documents might plausibly say than to raw KanColle UI wording.
+
+That means:
+
+- keep game data internally when it is useful for logic
+- but prefer IJN-flavored phrasing in the user-facing text whenever possible
+- avoid leaking game UI labels like raw `S / A / B` rank wording into `硬派詳報`
+- when the plugin does not know enough to write something in a historically flavored way, say `未詳` / `細目未詳` instead of inventing detail
+
+この plugin は **for fun** だからこそ、出力文は「艦これの UI をそのまま言い換えたもの」よりも、「IJN の文書がそれっぽく書きそうな字面」に寄せるのを優先します。
+
+つまり、
+
+- 内部では game data を保持してよい
+- ただし user-facing text はできるだけ IJN 風の言い回しを優先する
+- `硬派詳報` に `S / A / B` のような game UI ラベルをそのまま漏らさない
+- 史実風に安全に書けない detail は、作らずに `未詳` / `細目未詳` と書く
+
+This is the tie-break rule for future changes.
+If a choice must be made between "gamey but explicit" and "more IJN-like and still honest," prefer the latter.
+
+今後の変更で迷った時は、この原則を優先します。
+「ゲームっぽいけれど露骨」か「もう少し IJN っぽく、かつ嘘をつかない」かで迷ったら、後者を取ります。
+
 ![KC War Report GUI](assets/gui-overview.png)
 
 ## What It Really Does / 本当は何をする plugin か
@@ -167,14 +193,14 @@ Representative direction:
 令和八年三月十四日
 於 ブルネイ泊地沖
 
-発：少将 夜詠提督
+発：少将 夜詠
 宛：聯合艦隊司令部
 
 四、戦闘経過。
-【Node 2】
+【第二交戦点】
 　交戦時刻　1240
 　敵情　敵深海潜水艦隊 II群。確認艦種 潜水ヨ級、潜水カ級。
-　戦果判定　S
+　交戦結果　敵ニ甚大ナル打撃ヲ与ヘ、我行動概ネ所期ノ通リ。
 　交戦概要　航空攻撃ヲ伴フ交戦。砲雷戦細目未詳。
 ```
 
