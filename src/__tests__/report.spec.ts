@@ -189,6 +189,7 @@ describe('war report sortie architecture', () => {
   it('keeps public styles broad while avoiding fabricated precision', () => {
     const report = buildWarReportFromRecord(normalizeSortieSession(sortieSession, 'completed'))
 
+    expect(report.bulletin).toContain('大本営海軍部発表')
     expect(report.bulletin).toContain('ブルネイ泊地沖')
     expect(report.body).toMatch(/敵潜[水航]兵力/)
     expect(report.body).not.toContain('撃墜')
@@ -210,7 +211,9 @@ describe('war report sortie architecture', () => {
   it('routes practice captures into single-report practice phrasing', () => {
     const report = buildWarReportFromRecord(normalizePracticeCapture(practiceCapture), 'short_bulletin')
 
+    expect(report.bulletin).toContain('大本営海軍部発表')
     expect(report.bulletin).toContain('演習部隊')
+    expect(report.body).toContain('一、')
     expect(report.body).toContain('演習')
   })
 
@@ -263,7 +266,9 @@ describe('war report sortie architecture', () => {
     })
     const short = buildWarReportFromRecord(record, 'short_bulletin')
 
-    expect(standard.body).toContain('【大本営海軍報道部発表】')
+    expect(standard.bulletin).toContain('大本営海軍部発表')
+    expect(standard.bulletin).not.toContain('海軍省提供')
+    expect(standard.body).not.toContain('【大本営海軍報道部発表】')
     expect(formal.bulletin).toContain('戦闘詳報')
     expect(formal.body).toContain('発：海軍少将 テスト')
     expect(formal.body).toContain('宛：聯合艦隊司令部')
@@ -275,7 +280,11 @@ describe('war report sortie architecture', () => {
     expect(formal.body).not.toContain('総合戦果判定')
     expect(formal.body).toContain('砲雷戦細目未詳')
     expect(formal.body).toContain('以上')
-    expect(short.body).toContain('【大本営発表】')
+    expect(short.bulletin).toContain('大本営海軍部発表')
+    expect(short.bulletin).not.toContain('海軍省提供')
+    expect(short.body).toContain('一、')
+    expect(short.body).toContain('二、')
+    expect(short.body).not.toContain('【大本営発表】')
   })
 
   it('keeps formal findings cold and concise instead of using bulletin praise phrasing', () => {
@@ -437,6 +446,8 @@ describe('war report sortie architecture', () => {
     expect(formal.body).toContain('砲雷戦細目未詳')
     expect(formal.body).toContain('戦果総括')
     expect(short.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
+    expect(short.body).toContain('一、')
+    expect(short.body).toContain('二、')
     expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|赫々|圧倒|壊滅的/)
     expect(`${short.bulletin}\n${short.body}`).not.toMatch(/転進|反転|離脱/)
     expect(standard.body).not.toContain('撃墜')
@@ -467,12 +478,57 @@ describe('war report sortie architecture', () => {
     expect(record.failureMode).toBe('failed_with_heavy_losses')
     expect(record.damageSummary.heavyDamageCount).toBeGreaterThanOrEqual(2)
     expect(standard.body).toMatch(/成果|戦果|敵企図/)
+    expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/粉砕|赫々|壊滅的|殲滅的/)
     expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/損傷|損耗|損害|大破|中破/)
     expect(formal.body).toContain('大破艦　若干')
     expect(formal.body).toContain('七、所見。')
     expect(short.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
+    expect(short.body).toContain('一、')
+    expect(short.body).toContain('二、')
     expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|赫々|圧倒|壊滅的/)
     expect(`${short.bulletin}\n${short.body}`).not.toMatch(/損傷|損耗|損害|大破|中破/)
+  })
+
+  it('keeps standard bulletins calmer than short bulletins under the same failed sortie', () => {
+    const failedSortie = {
+      ...sortieSession,
+      friendlyFleetLatest: ships.map((ship, index) => ({
+        ...ship,
+        endHp: index === 0 ? 7 : index === 1 ? 8 : ship.endHp,
+      })),
+    }
+    const record = normalizeSortieSession(failedSortie, 'failed')
+
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin')
+    const short = buildWarReportFromRecord(record, 'short_bulletin')
+
+    expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/粉砕|赫々|壊滅的|殲滅的/)
+    expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|赫々|圧倒|壊滅的|殲滅的/)
+  })
+
+  it('does not force concealment lines into every standard bulletin', () => {
+    const record = normalizeSortieSession(sortieSession, 'completed')
+    const concealmentPattern =
+      /我ニ損害ナシ|我方損害軽微ナリ|各隊整然作戦ヲ継続セリ|我軍行動ニ支障ナシ|部隊態勢整然ナリ/
+
+    const reports = Array.from({ length: 8 }, (_, index) =>
+      buildWarReportFromRecord(record, 'standard_bulletin', { variantSeed: index + 1 }),
+    )
+    const concealed = reports.filter((report) => concealmentPattern.test(report.body))
+    const omitted = reports.filter((report) => !concealmentPattern.test(report.body))
+
+    expect(concealed.length).toBeGreaterThan(0)
+    expect(omitted.length).toBeGreaterThan(0)
+  })
+
+  it('renders short bulletins as numbered dispatches instead of bracketed prose', () => {
+    const report = buildWarReportFromRecord(normalizeSortieSession(sortieSession, 'completed'), 'short_bulletin')
+
+    expect(report.bulletin).toContain('大本営海軍部発表')
+    expect(report.body).toContain('一、')
+    expect(report.body).toContain('二、')
+    expect(report.body).not.toContain('【大本営発表】')
+    expect(report.body).not.toContain('海軍省提供')
   })
 
   it('selects air suppression as the main narrative for air-power engagements', () => {

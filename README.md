@@ -2,7 +2,7 @@
 
 Poi plugin that turns KanColle sortie sessions and practices into three different Japanese document personas:
 
-- a shameless `大本営海軍報道部発表` style public bulletin
+- a shameless `大本営海軍部発表` style public bulletin
 - a truth-first `戦闘詳報` style internal report
 - a short official-looking notice
 
@@ -10,7 +10,7 @@ Poi plugin that turns KanColle sortie sessions and practices into three differen
 
 - 恥知らずなくらい大本営っぽい `標準公報`
 - なるべく事実だけを書く `硬派詳報`
-- 共有しやすい `短報`
+- 逐号速報ふうに共有しやすい `短報`
 
 This project is **for fun**.
 It is not trying to become a full battle analyzer, a replay viewer, or a historical simulator.
@@ -177,13 +177,13 @@ Representative direction:
 ### `標準公報`
 
 ```text
-海軍省提供
+大本営海軍部発表
 
 令和八年三月十四日
 
 ブルネイ泊地沖方面、敵潜水兵力ノ企図ヲ粉砕
 
-敵潜水兵力ニ対シ主導権ヲ掌握シ作戦目的ヲ貫徹
+敵潜水兵力ニ打撃ヲ加ヘ大ナル戦果ヲ収メタリ
 ```
 
 ### `硬派詳報`
@@ -207,12 +207,15 @@ Representative direction:
 ### `短報`
 
 ```text
-海軍省提供
+大本営海軍部発表
 
 令和八年三月十四日
 
-ブルネイ泊地沖方面
-敵企図ヲ粉砕
+ブルネイ泊地沖方面、敵企図ヲ粉砕
+
+一、我軍、攻撃ヲ開始セリ。
+二、敵潜航企図ヲ挫折セシメタリ。
+三、戦果顕著ナリ。
 ```
 
 ## Quick Install / クイックインストール
