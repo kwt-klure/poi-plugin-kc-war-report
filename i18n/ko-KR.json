@@ -44,5 +44,11 @@
   "Settings limitation battle-unit": "출격은 출항부터 귀항까지 한 건으로, 연습은 한 번마다 기록됩니다.",
   "Settings limitation japanese-output": "생성된 전보 본문은 항상 일본어입니다.",
   "Settings limitation template": "문체는 템플릿 기반이며 세부가 부족하면 보수적인 표현을 사용합니다.",
+  "Formal report addressing": "강경 상세보고 발수신 설정",
+  "Use detected admiral sender": "감지한 제독 명의를 발신자로 사용",
+  "Formal sender fallback": "발신자 fallback",
+  "Formal recipient": "수신처",
+  "Detected admiral preview": "감지된 제독: {{admiral}}",
+  "Detected admiral missing": "아직 제독 정보를 감지하지 못했습니다. Poi 안에서 모항을 열면 갱신됩니다.",
   "Version": "버전 {{version}}"
 }

@@ -1,30 +1,152 @@
 # KC War Report
 
-Standalone Poi plugin that turns KanColle sortie sessions and practices into a full Japanese war bulletin in a `大本営海軍報道部発表` style.
+Poi plugin that turns KanColle sortie sessions and practices into three different Japanese document personas:
 
-艦これの出撃や演習を、`大本営海軍報道部発表` 風の戦報へ変換する Poi plugin です。
+- a shameless `大本営海軍報道部発表` style public bulletin
+- a truth-first `戦闘詳報` style internal report
+- a short official-looking notice
 
-Poi plugin that turns a finished sortie into a shameless `大本営` bulletin, a cold internal `戦闘詳報抄`, or a short official notice.
+艦これの sortie / 演習結果を、三種類の日本語文書へ変換する Poi plugin です。
+
+- 恥知らずなくらい大本営っぽい `標準公報`
+- なるべく事実だけを書く `硬派詳報`
+- 共有しやすい `短報`
+
+This project is **for fun**.
+It is not trying to become a full battle analyzer, a replay viewer, or a historical simulator.
+It is a local writing engine that takes the facts the plugin actually knows and reframes them into different wartime document voices.
+
+この project は **for fun** です。
+完全な battle analyzer や replay viewer、史実再現 simulator を目指しているわけではありません。
+plugin が実際に取れた事実を、別の戦時文書人格で書き換えるローカル文体 engine です。
 
 ![KC War Report GUI](assets/gui-overview.png)
 
-## What it does / これは何か
+## What It Really Does / 本当は何をする plugin か
+
+The plugin captures:
+
+- one full sortie session from departure to return
+- one practice battle result
+- fleet composition, flagship / MVP, battle rank, broad enemy classification, damage state, node trail, and a few other safe signals
+
+Then it renders the same captured result in three voices:
 
 - `標準公報`
-  - A shameless public bulletin in a Daihonei tone.
-  - 大本営の対外発表らしく、堂々と大げさに書くモードです。
+  - propaganda-first public bulletin
+  - can exaggerate victory tone and minimize losses
+  - intentionally does **not** print fake precise numbers such as shot-down aircraft counts
 - `硬派詳報`
-  - A cold internal after-action document.
-  - 冷たく硬い内部文書として書くモードです。
+  - truth-first internal report
+  - sender stands on the player admiral side
+  - uses chaptered report structure and node sections
+  - writes `未詳` / `細目未詳` when detail is not available instead of inventing it
 - `短報`
-  - A short, complete official notice that is easy to share.
-  - 短くても公告らしい形を保った、共有しやすいモードです。
+  - shorter propaganda-facing official notice
+  - easier to copy and share
 
-## Example output / 出力例
+この plugin が取るのは、
 
-One sortie, three document identities:
+- 出港から帰投までの sortie 一件
+- 単発の演習一件
+- 編成、旗艦 / MVP、戦果、ざっくりした敵情、損害、node trail などの「安全に言える範囲」の事実
 
-同じ sortie を、三種類の文書として書き分けます。
+です。
+
+その上で同じ capture を、
+
+- `標準公報`
+  - 宣伝優先の対外公報
+  - 勝利の言い方は盛る
+  - ただし撃墜数のような精密な fake 数字は出さない
+- `硬派詳報`
+  - 事実優先の内部文書
+  - 発信者はプレイヤー提督側
+  - 章立て + node ごとの節で書く
+  - detail が無い所は `未詳` と書いてごまかさない
+- `短報`
+  - 短く切った公報
+  - 共有向け
+
+に書き分けます。
+
+## Current Phase / 現在の実装段階
+
+Current status is the roadmap's **Phase 1**:
+
+- public styles now use a deterministic rhetoric engine with phrase banks
+- formal report now has separate sender / recipient handling
+- history keeps stable rendered text per style instead of regenerating everything differently each time
+- settings now include minimal formal-report addressing controls
+
+今は roadmap の **Phase 1** です。
+
+- 公報系は deterministic な phrase bank を使う
+- 硬派詳報は発受文の扱いを分離した
+- 履歴は style ごとの描画結果を保持し、毎回別文になるのを避ける
+- 設定画面に硬派詳報の最小限の発受設定を追加した
+
+## What Is Implemented Now / 今できること
+
+- Capture one sortie as one history entry, and one practice as one history entry
+- Render three distinct styles from the same captured result
+- Copy the generated text or export it as `.txt`
+- Keep recent history across Poi restarts
+- Keep public-style phrasing deterministic per saved entry
+- Detect admiral identity from Poi API responses when available
+- Use detected admiral identity as the formal report sender, or fall back to a manual sender line
+- Set the formal report recipient in settings
+- Keep `硬派詳報` fact-oriented and separate from public propaganda styles
+
+## What It Does Not Do Yet / まだやっていないこと
+
+This is important:
+
+- It does **not** store full raw API packets in history
+- It does **not** yet build a full per-action battle ledger
+- It does **not** yet report exact shell counts / torpedo counts
+- It does **not** try to support every strange event battle shape in Phase 1
+- `硬派詳報` is more truthful now, but still summary-level in many places
+
+ここは大事です。
+
+- 履歴に full raw API packet は保存しません
+- まだ逐次 battle action ledger は作っていません
+- 砲弾何発 / 魚雷何本のような exact count はまだ出しません
+- Phase 1 の段階では特殊 battle shape 全対応を目指していません
+- `硬派詳報` は truth-first になったものの、まだ多くの箇所は summary-level です
+
+## Why The Styles Behave Differently / なぜ文体ごとに態度が違うのか
+
+The split is intentional:
+
+- `標準公報` and `短報` are allowed to behave like wartime propaganda.
+  - They can inflate tone.
+  - They can soften losses.
+  - They can present tactical withdrawal as a dignified transfer / regrouping style narrative.
+- `硬派詳報` is not allowed to do that.
+  - It should stay on the "reporting upward" side.
+  - If the plugin does not know a detail, it should say so.
+
+この分離は意図的です。
+
+- `標準公報` と `短報` は戦時 propaganda として振る舞ってよい
+  - 言い方は盛る
+  - 損害は和らげる
+  - 撤退も「転進」っぽく見せる
+- `硬派詳報` はそれをしない
+  - 上申文書の側に立つ
+  - 分からない detail は分からないと書く
+
+## Example Direction / 出力の方向性
+
+The exact phrasing is no longer a single fixed template.
+Saved entries keep stable wording, but different entries can choose different lines.
+
+今は一枚テンプレではなく、saved entry ごとに wording を固定する方式です。
+同じ履歴は安定して同じ文章になりますが、別 entry では別句を選ぶことがあります。
+
+Representative direction:
 
 ### `標準公報`
 
@@ -33,36 +155,27 @@ One sortie, three document identities:
 
 令和八年三月十四日
 
-出撃部隊、ブルネイ泊地沖ニ於テ敵潜水兵力ヲ制圧
+ブルネイ泊地沖方面、敵潜水兵力ノ企図ヲ粉砕
 
-我方損害ナク所定任務ヲ完遂
-
-【大本営海軍報道部発表】
-
-帝国海軍出撃部隊ノ一部ハ、令和八年三月十四日、ブルネイ泊地沖ニ於ケル行動中、敵潜水兵力ト遭遇シ、之ニ対シ攻撃ヲ実施、所定任務ヲ完遂セリ。
-
-当時我部隊兵力ハ、駆逐艦四隻、軽巡洋艦一隻ヲ基幹トスル兵力ニシテ、旗艦「ジョンストン」ノ指揮ノ下、沈着機敏ニ行動セリ。
+敵潜水兵力ニ対シ主導権ヲ掌握シ作戦目的ヲ貫徹
 ```
 
 ### `硬派詳報`
 
 ```text
-戦闘詳報抄
+戦闘詳報
 令和八年三月十四日
 於 ブルネイ泊地沖
 
-発：出撃部隊指揮官
-宛：上級司令部
+発：少将 夜詠提督
+宛：聯合艦隊司令部
 
-件名：ブルネイ泊地沖ニ於ケル敵潜水兵力遭遇戦闘ノ件
-
-一、我出撃部隊ハ、令和八年三月十四日、ブルネイ泊地沖ニ於ケル行動中、敵潜水兵力ト遭遇セリ。
-二、当時我兵力ハ、駆逐艦四隻、軽巡洋艦一隻ヲ以テ編成、旗艦「ジョンストン」之ヲ率ヰタリ。
-三、各艦直ニ戦闘配置ニ移行、敵ニ対シ攻撃ヲ実施セリ。
-
-七、所見。
-　対潜戦闘処置、任務達成ニ資ス。
-　「ヴェールヌイ」ノ行動、寄与スル所アリ。
+四、戦闘経過。
+【Node 2】
+　交戦時刻　1240
+　敵情　敵深海潜水艦隊 II群。確認艦種 潜水ヨ級、潜水カ級。
+　戦果判定　S
+　交戦概要　航空攻撃ヲ伴フ交戦。砲雷戦細目未詳。
 ```
 
 ### `短報`
@@ -72,21 +185,13 @@ One sortie, three document identities:
 
 令和八年三月十四日
 
-ブルネイ泊地沖ニ於テ敵潜水兵力ヲ制圧
-出撃部隊、小損害アリト雖モ任務完遂
-
-【大本営発表】
-帝国海軍出撃部隊ノ一部ハ、ブルネイ泊地沖ニ於テ敵潜水兵力ト交戦シ、之ヲ制圧セリ。
-我方小損害アリ。
-所定任務ヲ完遂セリ。
-殊ニ「ヴェールヌイ」奮戦顕著ナリ。
+ブルネイ泊地沖方面
+敵企図ヲ粉砕
 ```
 
-## Quick install / クイックインストール
+## Quick Install / クイックインストール
 
-For macOS + Poi, the fastest install path is:
-
-macOS + Poi なら、いちばん簡単な導入方法はこれです。
+For macOS + Poi:
 
 ```bash
 npm install 'git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git' --prefix "$HOME/Library/Application Support/poi/plugins"
@@ -94,30 +199,20 @@ npm install 'git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git' --pr
 
 Then:
 
-その後:
-
-1. Restart Poi, or reload the plugin list.
-   Poi を再起動するか、plugin list を再読込します。
-2. Open the plugin panel and enable `KC War Report`.
-   plugin panel で `KC War Report` を有効化します。
-3. Run a sortie or practice battle, then open the plugin tab.
-   出撃または演習を一度行い、plugin tab を開きます。
+1. Restart Poi or reload the plugin list
+2. Enable `KC War Report`
+3. Run a sortie or a practice once
+4. Open the plugin tab
 
 ## Update / 更新
 
-Run the same command again to pull the latest version:
-
-最新版へ更新する時も、同じコマンドをもう一度実行すれば大丈夫です。
+Run the same install command again:
 
 ```bash
 npm install 'git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git' --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
-## Install from source / ソースから導入
-
-If you want to build from a local checkout instead:
-
-手元で clone してから build したい場合はこちらです。
+## Install From Source / ソースから導入
 
 ```bash
 git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
@@ -127,31 +222,19 @@ npm pack --pack-destination dist
 npm install "./dist/poi-plugin-kc-war-report-0.4.6.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
-## Scope / できること
+## Settings / 設定
 
-- Reads sortie sessions from departure to return, plus single practice battles
-- 出港から帰投までの sortie と、単発の演習を読み取ります
-- Generates a short `海軍省提供` bulletin and a longer report body
-- `海軍省提供` の短報と、より長い本文を生成します
-- Includes three render modes: `標準公報`, `硬派詳報`, and `短報`
-- `標準公報`、`硬派詳報`、`短報` の三つの mode を切り替えられます
-- Supports copying the generated report and exporting it as a `.txt` file
-- 生成した戦報をコピーしたり `.txt` として出力できます
-- Does not use LLMs or external APIs
-- LLM や外部 API は使いません
-- Persists recent reports locally across Poi restarts
-- 最近の戦報履歴をローカルに保持します
+Current formal report settings:
 
-## Limits / 制限
+- whether to use detected admiral identity as the sender
+- fallback sender line
+- recipient line
 
-- The report is template-based and intentionally conservative
-- 戦報はテンプレート生成で、意図的に保守的な作りです
-- Damage wording is derived from the latest available fleet HP snapshot and may fall back to broad phrasing
-- 損害表現は取得できた最新 HP を基準にしており、場合によっては広めの表現になります
-- Sorties are summarized as one overall report rather than a per-node narrative
-- sortie は node ごとの実況ではなく、一篇の要約戦報としてまとめます
-- macOS + Poi is the primary tested install path right now
-- 現時点では macOS + Poi を主な動作確認環境としています
+現在の硬派詳報設定:
+
+- 検出した提督名を sender に使うか
+- sender fallback
+- recipient
 
 ## Validation / 検証
 
@@ -160,3 +243,7 @@ npm install
 npm run typeCheck
 npm test -- --runInBand
 ```
+
+## Patch Notes / パッチノート
+
+See [PATCHNOTES.md](PATCHNOTES.md).

@@ -44,5 +44,11 @@
   "Settings limitation battle-unit": "出擊會以整趟出港到回港記成一篇；演習仍維持單篇。",
   "Settings limitation japanese-output": "生成的戰報本文固定是日文。",
   "Settings limitation template": "文風是模板式生成；若戰鬥細節不足，會使用較保守的敘述。",
+  "Formal report addressing": "硬派詳報發受設定",
+  "Use detected admiral sender": "發件人優先使用偵測到的提督稱謂",
+  "Formal sender fallback": "發件人 fallback",
+  "Formal recipient": "收件人",
+  "Detected admiral preview": "目前偵測到的提督：{{admiral}}",
+  "Detected admiral missing": "目前還沒偵測到提督資訊。請在 Poi 內開一次母港後再查看。",
   "Version": "版本 {{version}}"
 }

@@ -13,9 +13,11 @@ import {
 } from './model'
 import { IN_POI } from '../poi/env'
 import { getStoreValue } from '../poi/store'
-import { buildWarReportFromRecord } from '../report/render'
+import { buildFormalAddressSnapshot, resolveAdmiralRankLabel, setDetectedAdmiralIdentity } from '../report/preferences'
+import { buildRenderedReportsForHistoryEntry } from '../report/render'
 import type { PoiFleet, PoiShip, PoiShipMaster, PoiShipTypeMaster } from '../poi/types'
 import type {
+  AdmiralIdentity,
   BattleCapture,
   BattleMode,
   BattleNodeCapture,
@@ -74,6 +76,41 @@ let practiceOpponent: string | null = null
 let finalizeTimer: ReturnType<typeof setTimeout> | null = null
 let pendingFinalize: PendingFinalize | null = null
 let listening = false
+
+const updateDetectedAdmiralFromBody = (body: Record<string, unknown> | null | undefined) => {
+  if (!body) {
+    return
+  }
+
+  const rawNickname = body.api_nickname
+  const rawRank = body.api_rank
+  const nickname =
+    typeof rawNickname === 'string' && rawNickname.trim()
+      ? rawNickname.trim()
+      : typeof rawNickname === 'number'
+        ? String(rawNickname)
+        : ''
+  const rankValue =
+    typeof rawRank === 'number'
+      ? rawRank
+      : typeof rawRank === 'string' && rawRank.trim()
+        ? Number(rawRank)
+        : null
+
+  if (!nickname) {
+    return
+  }
+
+  const identity: AdmiralIdentity = {
+    name: nickname,
+    rankValue: Number.isFinite(rankValue as number) ? (rankValue as number) : null,
+    rankLabel: resolveAdmiralRankLabel(
+      Number.isFinite(rankValue as number) ? (rankValue as number) : null,
+    ),
+  }
+
+  setDetectedAdmiralIdentity(identity)
+}
 
 const getArrayValue = <T>(value: Record<string, T> | T[] | null | undefined, id: string | number) => {
   if (!value) {
@@ -252,27 +289,51 @@ const buildSortieHistoryEntry = (
   status: 'completed' | 'failed',
 ) => {
   const record = normalizeSortieSession(session, status)
-  const report = buildWarReportFromRecord(record, 'standard_bulletin')
+  const { variantSeed, addressSnapshot, renderedReports } = buildRenderedReportsForHistoryEntry(
+    record,
+    { kind: 'sortie', sortie: session },
+    buildFormalAddressSnapshot(),
+    getWarReportHistoryView().entries,
+  )
   return {
     id: `sortie:${session.id}:${status}`,
     capturedAt: status === 'completed' ? Date.now() : session.updatedAt,
     entryType: 'sortie' as const,
     status,
     record,
-    report,
+    report: renderedReports.standard_bulletin!,
+    renderedReports,
+    variantSeed,
+    addressSnapshot,
+    truthSource: {
+      kind: 'sortie' as const,
+      sortie: session,
+    },
   }
 }
 
 const buildPracticeHistoryEntry = (capture: BattleCapture) => {
   const record = normalizePracticeCapture(capture)
-  const report = buildWarReportFromRecord(record, 'standard_bulletin')
+  const { variantSeed, addressSnapshot, renderedReports } = buildRenderedReportsForHistoryEntry(
+    record,
+    { kind: 'practice', practice: capture },
+    buildFormalAddressSnapshot(),
+    getWarReportHistoryView().entries,
+  )
   return {
     id: `practice:${record.occurredAt}:${record.practiceOpponent ?? ''}`,
     capturedAt: record.occurredAt,
     entryType: 'practice' as const,
     status: 'completed' as const,
     record,
-    report,
+    report: renderedReports.standard_bulletin!,
+    renderedReports,
+    variantSeed,
+    addressSnapshot,
+    truthSource: {
+      kind: 'practice' as const,
+      practice: capture,
+    },
   }
 }
 
@@ -480,7 +541,15 @@ const handleGameResponse = (event: Event) => {
     return
   }
 
+  if (detail.path === '/kcsapi/api_get_member/basic') {
+    updateDetectedAdmiralFromBody(detail.body)
+    return
+  }
+
   if (detail.path === '/kcsapi/api_port/port') {
+    updateDetectedAdmiralFromBody(
+      (detail.body.api_basic as Record<string, unknown> | undefined) ?? detail.body,
+    )
     flushPendingFinalize()
     finalizeCurrentSortie('completed')
     return

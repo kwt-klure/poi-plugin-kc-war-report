@@ -44,5 +44,11 @@
   "Settings limitation battle-unit": "Sorties are recorded as one report from departure to return; practices remain single reports.",
   "Settings limitation japanese-output": "Generated report output is always in Japanese.",
   "Settings limitation template": "The writing is template-based and may use broad phrases when battle detail is incomplete.",
+  "Formal report addressing": "Formal report addressing",
+  "Use detected admiral sender": "Use detected admiral as sender",
+  "Formal sender fallback": "Sender fallback",
+  "Formal recipient": "Recipient",
+  "Detected admiral preview": "Detected admiral: {{admiral}}",
+  "Detected admiral missing": "No admiral identity detected yet. Open the port screen in Poi to refresh it.",
   "Version": "Version {{version}}"
 }

@@ -1,11 +1,14 @@
 import { useSyncExternalStore } from 'react'
 
 import { PACKAGE_NAME } from '../poi/env'
+import { buildFormalAddressSnapshot } from '../report/preferences'
 import type {
+  BattleCapture,
   SortieSessionCapture,
   WarReportHistoryEntry,
   WarReportHistoryState,
   WarReportHistoryView,
+  WarReportTruthSource,
 } from './types'
 
 const STORAGE_KEY = `${PACKAGE_NAME}:history`
@@ -52,18 +55,64 @@ const isValidSortieSession = (value: unknown): value is SortieSessionCapture => 
   )
 }
 
+const isValidPracticeCapture = (value: unknown): value is BattleCapture => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Partial<BattleCapture>
+  return Boolean(
+    candidate.kind === 'practice' &&
+      typeof candidate.occurredAt === 'number' &&
+      Array.isArray(candidate.friendlyFleet) &&
+      Array.isArray(candidate.enemyShipNamesRaw),
+  )
+}
+
+const isValidTruthSource = (value: unknown): value is WarReportTruthSource => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Partial<WarReportTruthSource>
+  if (candidate.kind === 'sortie') {
+    return isValidSortieSession(candidate.sortie)
+  }
+
+  if (candidate.kind === 'practice') {
+    return isValidPracticeCapture(candidate.practice)
+  }
+
+  return false
+}
+
+const normalizeEntry = (entry: WarReportHistoryEntry): WarReportHistoryEntry => {
+  const renderedReports = entry.renderedReports ?? { standard_bulletin: entry.report }
+  const defaultAddressSnapshot = buildFormalAddressSnapshot()
+
+  return {
+    ...entry,
+    renderedReports,
+    variantSeed: typeof entry.variantSeed === 'number' ? entry.variantSeed : undefined,
+    addressSnapshot: entry.addressSnapshot ?? defaultAddressSnapshot,
+    truthSource: isValidTruthSource(entry.truthSource) ? entry.truthSource : null,
+  }
+}
+
 const normalizeState = (input: Partial<WarReportHistoryState> | null | undefined): WarReportHistoryState => {
   const entries = Array.isArray(input?.entries)
-    ? input.entries.filter((entry): entry is WarReportHistoryEntry =>
-        Boolean(
-          entry?.id &&
-            entry?.capturedAt &&
-            entry?.entryType &&
-            entry?.status &&
-            entry?.record &&
-            entry?.report,
-        ),
-      )
+    ? input.entries
+        .filter((entry): entry is WarReportHistoryEntry =>
+          Boolean(
+            entry?.id &&
+              entry?.capturedAt &&
+              entry?.entryType &&
+              entry?.status &&
+              entry?.record &&
+              entry?.report,
+          ),
+        )
+        .map(normalizeEntry)
     : []
 
   const selectedId =

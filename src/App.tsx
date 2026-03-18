@@ -23,7 +23,7 @@ import { buildPlainTextReport, copyReportToClipboard, exportReportToFile } from 
 import { IN_POI } from './poi/env'
 import { usePluginTranslation } from './poi/hooks'
 import { tips } from './poi/utils'
-import { buildWarReportFromRecord } from './report/render'
+import { getWarReportForHistoryEntry } from './report/render'
 import { setWarReportStyle, useWarReportStyle } from './report/style'
 
 const Page = styled.div`
@@ -248,8 +248,7 @@ const AppMain: React.FC = () => {
   const selectedEntry = history.selectedEntry
   const latestEntry = history.latestEntry
   const generatedReport = useMemo(
-    () =>
-      selectedEntry ? buildWarReportFromRecord(selectedEntry.record, selectedStyle) : null,
+    () => (selectedEntry ? getWarReportForHistoryEntry(selectedEntry, selectedStyle) : null),
     [selectedEntry, selectedStyle],
   )
   const combinedText = useMemo(

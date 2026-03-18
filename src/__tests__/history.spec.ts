@@ -84,6 +84,8 @@ describe('war report history store', () => {
     expect(view.entries).toHaveLength(1)
     expect(view.latestEntry?.record.operationLabel).toBe('バシー海峡')
     expect(view.selectedEntry?.id).toBe(view.latestEntry?.id)
+    expect(view.latestEntry?.renderedReports?.standard_bulletin).toEqual(baseReport)
+    expect(view.latestEntry?.addressSnapshot?.recipientLine).toBe('宛：聯合艦隊司令部')
   })
 
   it('returns a stable snapshot reference until store state changes', () => {

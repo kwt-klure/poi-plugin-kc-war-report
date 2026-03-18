@@ -41,6 +41,19 @@ export type WarReportStyle =
   | 'formal_after_action'
   | 'short_bulletin'
 
+export type AdmiralIdentity = {
+  name: string | null
+  rankValue: number | null
+  rankLabel: string | null
+}
+
+export type AddressSnapshot = {
+  senderLine: string
+  recipientLine: string
+  usesDetectedAdmiralSender: boolean
+  detectedAdmiral: AdmiralIdentity | null
+}
+
 export type FleetShipSnapshot = {
   instanceId: number
   shipId: number
@@ -116,6 +129,16 @@ export type SortieSessionCapture = {
   battles: BattleNodeCapture[]
 }
 
+export type WarReportTruthSource =
+  | {
+      kind: 'sortie'
+      sortie: SortieSessionCapture
+    }
+  | {
+      kind: 'practice'
+      practice: BattleCapture
+    }
+
 export type NormalizedWarReportRecord = {
   occurredAt: number
   kind: BattleKind
@@ -178,6 +201,13 @@ export type GeneratedWarReport = {
   body: string
 }
 
+export type WarReportRenderOptions = {
+  variantSeed?: number
+  addressSnapshot?: AddressSnapshot | null
+  truthSource?: WarReportTruthSource | null
+  recentReports?: Partial<Record<WarReportStyle, GeneratedWarReport[]>>
+}
+
 export type WarReportHistoryEntry = {
   id: string
   capturedAt: number
@@ -185,6 +215,10 @@ export type WarReportHistoryEntry = {
   status: EntryStatus
   record: NormalizedWarReportRecord
   report: GeneratedWarReport
+  renderedReports?: Partial<Record<WarReportStyle, GeneratedWarReport>>
+  variantSeed?: number
+  addressSnapshot?: AddressSnapshot | null
+  truthSource?: WarReportTruthSource | null
 }
 
 export type WarReportHistoryState = {

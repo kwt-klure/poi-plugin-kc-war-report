@@ -44,5 +44,11 @@
   "Settings limitation battle-unit": "出撃は出港から帰投まで一件、演習は一回ごとに記録されます。",
   "Settings limitation japanese-output": "生成される戦報本文は常に日本語です。",
   "Settings limitation template": "文体はテンプレートベースで、詳細不足時は広い表現を用います。",
+  "Formal report addressing": "硬派詳報の発受設定",
+  "Use detected admiral sender": "検出した提督名を発信者に使う",
+  "Formal sender fallback": "発信者フォールバック",
+  "Formal recipient": "受信先",
+  "Detected admiral preview": "検出中の提督: {{admiral}}",
+  "Detected admiral missing": "まだ提督情報を検出していません。Poi 内で母港を開くと更新されます。",
   "Version": "Version {{version}}"
 }

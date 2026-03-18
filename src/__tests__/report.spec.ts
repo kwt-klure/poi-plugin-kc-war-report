@@ -6,12 +6,24 @@ import {
   normalizeSortieSession,
 } from '../battle/model'
 import type {
+  AddressSnapshot,
   BattleCapture,
   BattleNodeCapture,
   FleetShipSnapshot,
   SortieSessionCapture,
 } from '../battle/types'
 import { buildWarReportFromRecord } from '../report/render'
+
+const formalAddressSnapshot: AddressSnapshot = {
+  senderLine: '発：少将 テスト提督',
+  recipientLine: '宛：聯合艦隊司令部',
+  usesDetectedAdmiralSender: true,
+  detectedAdmiral: {
+    name: 'テスト',
+    rankValue: 4,
+    rankLabel: '少将',
+  },
+}
 
 const ships: FleetShipSnapshot[] = [
   {
@@ -174,43 +186,48 @@ describe('war report sortie architecture', () => {
     expect(record.damageSummary.damagedShipCount).toBe(1)
   })
 
-  it('keeps headline enemy classification aligned with the body for sortie records', () => {
+  it('keeps public styles broad while avoiding fabricated precision', () => {
     const report = buildWarReportFromRecord(normalizeSortieSession(sortieSession, 'completed'))
 
-    expect(report.bulletin).toContain('敵潜水兵力ヲ制圧')
-    expect(report.body).toContain('敵潜水兵力ト遭遇シ')
-    expect(report.bulletin).not.toContain('敵航空兵力')
+    expect(report.bulletin).toContain('ブルネイ泊地沖')
+    expect(report.body).toContain('敵潜水兵力')
+    expect(report.body).not.toContain('撃墜')
+    expect(report.body).not.toContain('魚雷')
   })
 
-  it('marks interrupted sorties as failed campaign reports in the standard bulletin style', () => {
+  it('marks interrupted sorties as propaganda-heavy transfer reports in public styles', () => {
     const failed = buildWarReportFromRecord(
       normalizeSortieSession(sortieSession, 'failed'),
       'standard_bulletin',
     )
 
-    expect(failed.bulletin).toContain('我方損害ヲ生ジ、隊形ヲ整ヘ帰投')
-    expect(failed.body).toContain('指揮官ノ判断ニ依リ隊形ヲ整ヘ帰投セリ')
-    expect(failed.body).toContain('将来ノ雪辱ヲ期スルモノナリ')
+    expect(failed.bulletin).toContain('戦場ヲ離脱')
+    expect(failed.body).toContain('戦場ヲ離脱')
+    expect(failed.body).not.toContain('敵機')
   })
 
   it('routes practice captures into single-report practice phrasing', () => {
     const report = buildWarReportFromRecord(normalizePracticeCapture(practiceCapture), 'short_bulletin')
 
-    expect(report.bulletin).toContain('対抗演習実施')
-    expect(report.body).toContain('相手提督 (Lv.120)')
+    expect(report.bulletin).toContain('演習部隊')
+    expect(report.body).toContain('演習')
   })
 
-  it('renders aliased friendly names in sortie composition and commendation sentences', () => {
+  it('renders aliased friendly names in truth-only formal sections', () => {
     const report = buildWarReportFromRecord(
       normalizeSortieSession(sortieSession, 'completed'),
-      'standard_bulletin',
+      'formal_after_action',
+      {
+        truthSource: {
+          kind: 'sortie',
+          sortie: sortieSession,
+        },
+        addressSnapshot: formalAddressSnapshot,
+      },
     )
 
-    expect(report.body).toContain('旗艦「ジョンストン」ノ指揮ノ下')
-    expect(report.body).toContain('敵航空攻撃企図ヲ挫折セシムル')
-    expect(report.body).toContain('殊ニ「アトランタ」')
-    expect(report.body).not.toContain('諸戦闘ヲ通ジ')
-    expect(report.body).toContain('其武功ヲ広ク周知セシムルモノナリ')
+    expect(report.body).toContain('旗艦「ジョンストン」')
+    expect(report.body).toContain('「アトランタ」殊勲艦')
     expect(report.body).not.toContain('Johnston')
     expect(report.body).not.toContain('Atlanta')
     expect(report.body).not.toContain('Верный')
@@ -221,153 +238,178 @@ describe('war report sortie architecture', () => {
     const record = normalizeSortieSession(sortieSession, 'completed')
 
     const standard = buildWarReportFromRecord(record, 'standard_bulletin')
-    const formal = buildWarReportFromRecord(record, 'formal_after_action')
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: sortieSession,
+      },
+      addressSnapshot: formalAddressSnapshot,
+    })
     const short = buildWarReportFromRecord(record, 'short_bulletin')
 
     expect(standard.body).toContain('【大本営海軍報道部発表】')
-    expect(formal.bulletin).toContain('戦闘詳報抄')
-    expect(formal.body).toContain('発：出撃部隊指揮官')
-    expect(formal.body).toContain('宛：上級司令部')
-    expect(formal.body).toContain('標記ノ件ニ関シ、左記ノ通リ報告ス。')
-    expect(formal.body).toContain('件名：ブルネイ泊地沖ニ於ケル敵潜水兵力遭遇戦闘ノ件')
-    expect(formal.body).toContain('各艦直ニ戦闘配置ニ移行、敵ト交戦セリ。')
+    expect(formal.bulletin).toContain('戦闘詳報')
+    expect(formal.body).toContain('発：少将 テスト提督')
+    expect(formal.body).toContain('宛：聯合艦隊司令部')
+    expect(formal.body).toContain('【Node 2】')
+    expect(formal.body).toContain('砲雷戦細目未詳')
     expect(formal.body).toContain('以上')
     expect(short.body).toContain('【大本営発表】')
-    expect(short.body).toContain('殊ニ「アトランタ」奮戦顕著ナリ。')
   })
 
   it('keeps formal findings cold and concise instead of using bulletin praise phrasing', () => {
     const formal = buildWarReportFromRecord(
       normalizeSortieSession(sortieSession, 'completed'),
       'formal_after_action',
+      {
+        truthSource: {
+          kind: 'sortie',
+          sortie: sortieSession,
+        },
+        addressSnapshot: formalAddressSnapshot,
+      },
     )
 
     expect(formal.body).toContain('七、所見。')
     expect(formal.body).toContain('対潜戦闘処置、任務達成ニ資ス。')
-    expect(formal.body).toContain('「アトランタ」ノ行動、寄与スル所アリ。')
+    expect(formal.body).toContain('殊勲艦ト認定')
     expect(formal.body).not.toContain('奮戦顕著')
     expect(formal.body).not.toContain('沈着勇戦')
-    expect(formal.body).not.toContain('其武功ヲ広ク周知セシムルモノナリ')
+    expect(formal.body).not.toContain('其武功ヲ広く周知')
   })
 
   it('uses a less awkward encounter object for air-power cases while keeping public-facing enemy labels', () => {
     const record = normalizeSortieSession(airPowerSortieSession, 'completed')
 
     const standard = buildWarReportFromRecord(record, 'standard_bulletin')
-    const formal = buildWarReportFromRecord(record, 'formal_after_action')
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: airPowerSortieSession,
+      },
+      addressSnapshot: formalAddressSnapshot,
+    })
     const short = buildWarReportFromRecord(record, 'short_bulletin')
 
-    expect(standard.bulletin).toContain('敵航空兵力ヲ撃退')
-    expect(standard.body).toContain('敵航空兵力ヲ擁スル敵部隊ト遭遇シ')
-    expect(formal.body).toContain('敵航空兵力ヲ擁スル敵部隊ト遭遇セリ。')
-    expect(short.body).toContain('敵航空兵力ヲ擁スル敵部隊ト交戦シ')
-    expect(short.bulletin).toContain('敵航空兵力ヲ撃退')
+    expect(standard.body).toContain('敵航空兵力ヲ擁スル敵部隊')
+    expect(formal.body).toContain('敵航空兵力。')
+    expect(short.body).toContain('敵航空兵力ヲ擁スル敵部隊')
   })
 
-  it('keeps remodel suffixes out of all rendered document modes', () => {
+  it('keeps remodel suffixes out of rendered named references', () => {
     const record = normalizeSortieSession(airPowerSortieSession, 'completed')
 
-    const standard = buildWarReportFromRecord(record, 'standard_bulletin')
-    const formal = buildWarReportFromRecord(record, 'formal_after_action')
-    const short = buildWarReportFromRecord(record, 'short_bulletin')
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: airPowerSortieSession,
+      },
+      addressSnapshot: formalAddressSnapshot,
+    })
 
-    for (const report of [standard, formal, short]) {
-      expect(report.bulletin).not.toContain('神風改')
-      expect(report.body).not.toContain('神風改')
-      expect(report.bulletin).not.toContain('最上改二特')
-      expect(report.body).not.toContain('最上改二特')
-      expect(report.bulletin).not.toContain('Fletcher改')
-      expect(report.body).not.toContain('Fletcher改')
-    }
-
-    expect(standard.body).toContain('「神風」')
+    expect(formal.bulletin).not.toContain('神風改')
+    expect(formal.body).not.toContain('神風改')
+    expect(formal.bulletin).not.toContain('最上改二特')
+    expect(formal.body).not.toContain('最上改二特')
     expect(formal.body).toContain('「神風」')
-    expect(standard.body).toContain('「フレッチャー」')
     expect(formal.body).toContain('「フレッチャー」')
-    expect(short.body).toContain('「フレッチャー」')
   })
 
   it('renders successful sortie damage differently across the three styles', () => {
-    const record = normalizeSortieSession(
-      {
-        ...sortieSession,
-        friendlyFleetLatest: ships.map((ship, index) => ({
-          ...ship,
-          startHp: index === 0 ? 15 : ship.startHp,
-          endHp: index === 0 ? 15 : ship.endHp,
-        })),
-      },
-      'completed',
-    )
+    const damagedSortie = {
+      ...sortieSession,
+      friendlyFleetLatest: ships.map((ship, index) => ({
+        ...ship,
+        startHp: index === 0 ? 15 : ship.startHp,
+        endHp: index === 0 ? 15 : ship.endHp,
+      })),
+    }
+    const record = normalizeSortieSession(damagedSortie, 'completed')
 
     const standard = buildWarReportFromRecord(record, 'standard_bulletin')
-    const formal = buildWarReportFromRecord(record, 'formal_after_action')
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: damagedSortie,
+      },
+      addressSnapshot: formalAddressSnapshot,
+    })
     const short = buildWarReportFromRecord(record, 'short_bulletin')
 
-    expect(standard.bulletin).toContain('我方損害ナク所定任務ヲ完遂')
-    expect(standard.body).toContain('一艦ノ損傷モ無ク')
     expect(standard.body).not.toContain('中破艦')
     expect(formal.body).toContain('中破艦　一隻')
-    expect(formal.body).not.toContain('五、我方損害ナシ。')
-    expect(short.bulletin).toContain('小損害アリト雖モ任務完遂')
-    expect(short.body).toContain('我方小損害アリ。')
+    expect(short.body).not.toContain('中破艦')
   })
 
-  it('renders retreat failures differently across the three styles without naming damaged ships', () => {
-    const record = normalizeSortieSession(
-      {
-        ...sortieSession,
-        friendlyFleetLatest: ships.map((ship, index) => ({
-          ...ship,
-          endHp: index === 0 ? 7 : index === 1 ? 18 : ship.endHp,
-        })),
-      },
-      'failed',
-    )
+  it('renders retreat failures differently across the three styles without fabricating ammo counts', () => {
+    const failedSortie = {
+      ...sortieSession,
+      friendlyFleetLatest: ships.map((ship, index) => ({
+        ...ship,
+        endHp: index === 0 ? 7 : index === 1 ? 18 : ship.endHp,
+      })),
+    }
+    const record = normalizeSortieSession(failedSortie, 'failed')
 
     const standard = buildWarReportFromRecord(record, 'standard_bulletin')
-    const formal = buildWarReportFromRecord(record, 'formal_after_action')
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: failedSortie,
+      },
+      addressSnapshot: formalAddressSnapshot,
+    })
     const short = buildWarReportFromRecord(record, 'short_bulletin')
 
     expect(record.failureMode).toBe('failed_with_retreat')
-    expect(standard.body).toContain('我方ニ大破艦ヲ生ジ')
-    expect(formal.body).toContain('大破艦　アリ')
-    expect(formal.body).toContain('所定任務未達成ニ終ル。')
-    expect(short.bulletin).toContain('我方損害ヲ生ジ帰投')
-    expect(short.body).toContain('部隊ハ帰投セリ')
-    expect(standard.body).not.toContain('ジョンストン改(大破)')
-    expect(formal.body).not.toContain('ジョンストン改(大破)')
-    expect(formal.body).not.toContain('損傷艦:')
-    expect(short.body).not.toContain('損傷艦:')
+    expect(standard.body).toContain('戦場ヲ離脱')
+    expect(formal.body).toContain('大破艦　一隻')
+    expect(formal.body).toContain('砲雷戦細目未詳')
+    expect(short.body).toContain('敢闘ヲ嘉シ')
+    expect(standard.body).not.toContain('撃墜')
+    expect(formal.body).not.toContain('発砲')
+    expect(short.body).not.toContain('魚雷')
   })
 
   it('renders heavy-loss failures with stronger wording in all three styles', () => {
-    const record = normalizeSortieSession(
-      {
-        ...sortieSession,
-        friendlyFleetLatest: ships.map((ship, index) => ({
-          ...ship,
-          endHp: index === 0 ? 7 : index === 1 ? 8 : ship.endHp,
-        })),
-      },
-      'failed',
-    )
+    const failedSortie = {
+      ...sortieSession,
+      friendlyFleetLatest: ships.map((ship, index) => ({
+        ...ship,
+        endHp: index === 0 ? 7 : index === 1 ? 8 : ship.endHp,
+      })),
+    }
+    const record = normalizeSortieSession(failedSortie, 'failed')
 
     const standard = buildWarReportFromRecord(record, 'standard_bulletin')
-    const formal = buildWarReportFromRecord(record, 'formal_after_action')
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: failedSortie,
+      },
+      addressSnapshot: formalAddressSnapshot,
+    })
     const short = buildWarReportFromRecord(record, 'short_bulletin')
 
     expect(record.failureMode).toBe('failed_with_heavy_losses')
     expect(record.damageSummary.heavyDamageCount).toBeGreaterThanOrEqual(2)
-    expect(standard.body).toContain('所期ノ成果ヲ収ムルニ至ラザリシモ')
-    expect(standard.body).toContain('将来ノ雪辱ヲ期スルモノナリ')
-    expect(formal.body).toContain('大破艦　複数')
-    expect(formal.body).toContain('戦闘能力　著シク低下')
-    expect(short.bulletin).toContain('我方損害大、任務中止ノ上帰投')
-    expect(short.body).toContain('我方損害大ニシテ')
-    expect(standard.body).not.toContain('ジョンストン改(大破)')
-    expect(formal.body).not.toContain('ジョンストン改(大破)')
-    expect(short.body).not.toContain('ジョンストン改(大破)')
+    expect(standard.body).toContain('一部損傷')
+    expect(formal.body).toContain('大破艦　若干')
+    expect(formal.body).toContain('七、所見。')
+    expect(short.body).toContain('敢闘ヲ嘉シ')
+  })
+
+  it('keeps public styles deterministic for one record while allowing a manual seed override', () => {
+    const record = normalizeSortieSession(sortieSession, 'completed')
+
+    const first = buildWarReportFromRecord(record, 'standard_bulletin')
+    const second = buildWarReportFromRecord(record, 'standard_bulletin')
+    const overridden = buildWarReportFromRecord(record, 'standard_bulletin', {
+      variantSeed: 1,
+    })
+
+    expect(second).toEqual(first)
+    expect(overridden.bulletin).not.toBe(first.bulletin)
   })
 
   it('keeps composition summaries stable after the sortie refactor', () => {
