@@ -15,7 +15,7 @@ import type {
 import { buildWarReportFromRecord } from '../report/render'
 
 const formalAddressSnapshot: AddressSnapshot = {
-  senderLine: '発：少将 テスト提督',
+  senderLine: '発：少将 テスト',
   recipientLine: '宛：聯合艦隊司令部',
   usesDetectedAdmiralSender: true,
   detectedAdmiral: {
@@ -201,8 +201,8 @@ describe('war report sortie architecture', () => {
       'standard_bulletin',
     )
 
-    expect(failed.bulletin).toContain('戦場ヲ離脱')
-    expect(failed.body).toContain('戦場ヲ離脱')
+    expect(failed.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
+    expect(failed.body).toMatch(/転進|反転|離脱/)
     expect(failed.body).not.toContain('敵機')
   })
 
@@ -249,9 +249,10 @@ describe('war report sortie architecture', () => {
 
     expect(standard.body).toContain('【大本営海軍報道部発表】')
     expect(formal.bulletin).toContain('戦闘詳報')
-    expect(formal.body).toContain('発：少将 テスト提督')
+    expect(formal.body).toContain('発：少将 テスト')
     expect(formal.body).toContain('宛：聯合艦隊司令部')
-    expect(formal.body).toContain('【Node 2】')
+    expect(formal.body).toContain('【第二交戦点】')
+    expect(formal.body).not.toContain('Node 2')
     expect(formal.body).toContain('砲雷戦細目未詳')
     expect(formal.body).toContain('以上')
     expect(short.body).toContain('【大本営発表】')
@@ -271,7 +272,7 @@ describe('war report sortie architecture', () => {
     )
 
     expect(formal.body).toContain('七、所見。')
-    expect(formal.body).toContain('対潜戦闘処置、任務達成ニ資ス。')
+    expect(formal.body).toMatch(/対潜戦闘処置|対潜方面|処置概ネ|部隊行動概ネ/)
     expect(formal.body).toContain('殊勲艦ト認定')
     expect(formal.body).not.toContain('奮戦顕著')
     expect(formal.body).not.toContain('沈着勇戦')
@@ -293,7 +294,7 @@ describe('war report sortie architecture', () => {
 
     expect(standard.body).toContain('敵航空兵力ヲ擁スル敵部隊')
     expect(formal.body).toContain('敵航空兵力。')
-    expect(short.body).toContain('敵航空兵力ヲ擁スル敵部隊')
+    expect(`${short.bulletin}\n${short.body}`).toContain('敵航空')
   })
 
   it('keeps remodel suffixes out of rendered named references', () => {
@@ -362,10 +363,11 @@ describe('war report sortie architecture', () => {
     const short = buildWarReportFromRecord(record, 'short_bulletin')
 
     expect(record.failureMode).toBe('failed_with_retreat')
-    expect(standard.body).toContain('戦場ヲ離脱')
+    expect(standard.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
+    expect(standard.body).toMatch(/転進|反転/)
     expect(formal.body).toContain('大破艦　一隻')
     expect(formal.body).toContain('砲雷戦細目未詳')
-    expect(short.body).toContain('敢闘ヲ嘉シ')
+    expect(short.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
     expect(standard.body).not.toContain('撃墜')
     expect(formal.body).not.toContain('発砲')
     expect(short.body).not.toContain('魚雷')
@@ -393,10 +395,45 @@ describe('war report sortie architecture', () => {
 
     expect(record.failureMode).toBe('failed_with_heavy_losses')
     expect(record.damageSummary.heavyDamageCount).toBeGreaterThanOrEqual(2)
-    expect(standard.body).toContain('一部損傷')
+    expect(standard.body).toMatch(/損傷|損耗|損害/)
     expect(formal.body).toContain('大破艦　若干')
     expect(formal.body).toContain('七、所見。')
-    expect(short.body).toContain('敢闘ヲ嘉シ')
+    expect(short.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
+  })
+
+  it('selects air suppression as the main narrative for air-power engagements', () => {
+    const record = normalizeSortieSession(airPowerSortieSession, 'completed')
+    const report = buildWarReportFromRecord(record, 'standard_bulletin')
+
+    expect(report.selectionSnapshot?.mainNarrative).toBe('air_suppression')
+    expect(report.selectionSnapshot?.slotFamilies.headline).toBeTruthy()
+  })
+
+  it('selects disciplined withdrawal for failed sorties', () => {
+    const failedRecord = normalizeSortieSession(sortieSession, 'failed')
+    const report = buildWarReportFromRecord(failedRecord, 'short_bulletin')
+
+    expect(report.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
+  })
+
+  it('de-duplicates frequent slot families using recent selection history', () => {
+    const record = normalizeSortieSession(sortieSession, 'completed')
+    const repeatedFamilyHistory = Array.from({ length: 6 }, (_, index) => ({
+      style: 'standard_bulletin' as const,
+      mainNarrative: 'mission_completion' as const,
+      fingerprint: index + 1,
+      slotFamilies: {
+        headline: 'headline-decisive-blow',
+      },
+    }))
+
+    const report = buildWarReportFromRecord(record, 'standard_bulletin', {
+      recentSelections: {
+        standard_bulletin: repeatedFamilyHistory,
+      },
+    })
+
+    expect(report.selectionSnapshot?.slotFamilies.headline).not.toBe('headline-decisive-blow')
   })
 
   it('keeps public styles deterministic for one record while allowing a manual seed override', () => {
@@ -410,6 +447,7 @@ describe('war report sortie architecture', () => {
 
     expect(second).toEqual(first)
     expect(overridden.bulletin).not.toBe(first.bulletin)
+    expect(overridden.selectionSnapshot?.fingerprint).toBe(1)
   })
 
   it('keeps composition summaries stable after the sortie refactor', () => {

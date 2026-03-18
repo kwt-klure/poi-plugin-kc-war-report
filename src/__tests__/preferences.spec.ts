@@ -74,14 +74,14 @@ describe('formal report addressing preferences', () => {
 
   it('builds sender lines from detected admiral identity when available', () => {
     setDetectedAdmiralIdentity({
-      name: '夜詠提督',
+      name: '夜詠',
       rankValue: 4,
       rankLabel: '少将',
     })
 
     const snapshot = buildFormalAddressSnapshot()
 
-    expect(snapshot.senderLine).toBe('発：少将 夜詠提督')
+    expect(snapshot.senderLine).toBe('発：少将 夜詠')
     expect(snapshot.recipientLine).toBe('宛：聯合艦隊司令部')
     expect(snapshot.usesDetectedAdmiralSender).toBe(true)
   })

@@ -8,7 +8,12 @@ import {
   selectWarReportHistoryEntry,
   setCurrentInProgressSortie,
 } from '../battle/history'
-import type { GeneratedWarReport, NormalizedWarReportRecord, SortieSessionCapture } from '../battle/types'
+import type {
+  GeneratedWarReport,
+  NormalizedWarReportRecord,
+  SortieSessionCapture,
+  WarReportSelectionSnapshot,
+} from '../battle/types'
 
 const baseRecord: NormalizedWarReportRecord = {
   occurredAt: Date.UTC(2026, 2, 14, 4, 30, 0),
@@ -53,6 +58,16 @@ const baseReport: GeneratedWarReport = {
   body: '【大本営海軍報道部発表】',
 }
 
+const baseSelectionSnapshot: WarReportSelectionSnapshot = {
+  style: 'standard_bulletin',
+  mainNarrative: 'mission_completion',
+  fingerprint: 12345,
+  slotFamilies: {
+    headline: 'headline-mission-success',
+    closing: 'closing-public-merit',
+  },
+}
+
 const inProgressSortie: SortieSessionCapture = {
   id: 'sortie-1',
   startedAt: baseRecord.occurredAt,
@@ -86,6 +101,25 @@ describe('war report history store', () => {
     expect(view.selectedEntry?.id).toBe(view.latestEntry?.id)
     expect(view.latestEntry?.renderedReports?.standard_bulletin).toEqual(baseReport)
     expect(view.latestEntry?.addressSnapshot?.recipientLine).toBe('宛：聯合艦隊司令部')
+  })
+
+  it('derives selection snapshots from rendered reports for backward-compatible persistence', () => {
+    appendWarReportHistoryEntry({
+      capturedAt: baseRecord.occurredAt,
+      entryType: 'sortie',
+      status: 'completed',
+      record: baseRecord,
+      report: baseReport,
+      renderedReports: {
+        standard_bulletin: {
+          ...baseReport,
+          selectionSnapshot: baseSelectionSnapshot,
+        },
+      },
+    })
+
+    const entry = getWarReportHistoryView().latestEntry
+    expect(entry?.selectionSnapshots?.standard_bulletin).toEqual(baseSelectionSnapshot)
   })
 
   it('returns a stable snapshot reference until store state changes', () => {

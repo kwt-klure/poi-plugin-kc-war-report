@@ -1,6 +1,7 @@
 import type {
   AddressSnapshot,
   GeneratedWarReport,
+  WarReportSelectionSnapshot,
   NormalizedWarReportRecord,
   WarReportHistoryEntry,
   WarReportRenderOptions,
@@ -30,10 +31,22 @@ export const createVariantSeed = (
       occurredAt: record.occurredAt,
       kind: record.kind,
       operationLabel: record.operationLabel,
-      enemyDisplay: record.enemyDisplay,
+      operationPhrase: record.operationPhrase,
+      mapLabel: record.mapLabel,
+      enemyCategory: record.enemyCategory,
       winRank: record.winRank,
       status: record.status,
+      failureMode: record.failureMode,
+      damageSeverity: record.damageSummary.severity,
+      mvpName: record.mvpName,
+      flagshipName: record.flagshipName,
       nodeCount: record.nodeCount,
+      nodeTrail:
+        truthSource?.kind === 'sortie'
+          ? truthSource.sortie.nodeTrail
+          : truthSource?.kind === 'practice'
+            ? [truthSource.practice.operationPhraseRaw]
+            : [],
       truthKind: truthSource?.kind ?? null,
     }),
   )
@@ -57,6 +70,35 @@ const extractRecentReports = (
     .slice(0, 5),
 })
 
+const extractRecentSelections = (
+  entries: WarReportHistoryEntry[],
+): Partial<Record<WarReportStyle, WarReportSelectionSnapshot[]>> => ({
+  standard_bulletin: entries
+    .map(
+      (entry) =>
+        entry.selectionSnapshots?.standard_bulletin ??
+        entry.renderedReports?.standard_bulletin?.selectionSnapshot,
+    )
+    .filter((snapshot): snapshot is WarReportSelectionSnapshot => snapshot != null)
+    .slice(0, 20),
+  short_bulletin: entries
+    .map(
+      (entry) =>
+        entry.selectionSnapshots?.short_bulletin ??
+        entry.renderedReports?.short_bulletin?.selectionSnapshot,
+    )
+    .filter((snapshot): snapshot is WarReportSelectionSnapshot => snapshot != null)
+    .slice(0, 20),
+  formal_after_action: entries
+    .map(
+      (entry) =>
+        entry.selectionSnapshots?.formal_after_action ??
+        entry.renderedReports?.formal_after_action?.selectionSnapshot,
+    )
+    .filter((snapshot): snapshot is WarReportSelectionSnapshot => snapshot != null)
+    .slice(0, 20),
+})
+
 export const buildWarReportFromRecord = (
   record: NormalizedWarReportRecord,
   style: WarReportStyle = 'standard_bulletin',
@@ -77,6 +119,7 @@ export const buildRenderedReportsForHistoryEntry = (
   const variantSeed = createVariantSeed(record, truthSource)
   const resolvedAddressSnapshot = addressSnapshot ?? getDefaultAddressSnapshot()
   const recentReports = extractRecentReports(recentEntries)
+  const recentSelections = extractRecentSelections(recentEntries)
 
   const renderedReports: Partial<Record<WarReportStyle, GeneratedWarReport>> = {
     standard_bulletin: buildWarReportFromRecord(record, 'standard_bulletin', {
@@ -84,25 +127,41 @@ export const buildRenderedReportsForHistoryEntry = (
       truthSource,
       addressSnapshot: resolvedAddressSnapshot,
       recentReports,
+      recentSelections,
     }),
     short_bulletin: buildWarReportFromRecord(record, 'short_bulletin', {
       variantSeed,
       truthSource,
       addressSnapshot: resolvedAddressSnapshot,
       recentReports,
+      recentSelections,
     }),
     formal_after_action: buildWarReportFromRecord(record, 'formal_after_action', {
       variantSeed,
       truthSource,
       addressSnapshot: resolvedAddressSnapshot,
       recentReports,
+      recentSelections,
     }),
+  }
+
+  const selectionSnapshots: Partial<Record<WarReportStyle, WarReportSelectionSnapshot>> = {}
+
+  if (renderedReports.standard_bulletin?.selectionSnapshot) {
+    selectionSnapshots.standard_bulletin = renderedReports.standard_bulletin.selectionSnapshot
+  }
+  if (renderedReports.short_bulletin?.selectionSnapshot) {
+    selectionSnapshots.short_bulletin = renderedReports.short_bulletin.selectionSnapshot
+  }
+  if (renderedReports.formal_after_action?.selectionSnapshot) {
+    selectionSnapshots.formal_after_action = renderedReports.formal_after_action.selectionSnapshot
   }
 
   return {
     variantSeed,
     addressSnapshot: resolvedAddressSnapshot,
     renderedReports,
+    selectionSnapshots,
   }
 }
 

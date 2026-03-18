@@ -41,6 +41,57 @@ export type WarReportStyle =
   | 'formal_after_action'
   | 'short_bulletin'
 
+export type MainNarrative =
+  | 'clean_sweep'
+  | 'valor_highlight'
+  | 'air_suppression'
+  | 'submarine_intercept'
+  | 'mission_completion'
+  | 'damage_control'
+  | 'disciplined_withdrawal'
+
+export type OutcomeTone =
+  | 'decisive'
+  | 'favorable'
+  | 'contested'
+  | 'withdrawal'
+  | 'practice'
+
+export type DamageTone = 'pristine' | 'light' | 'strained' | 'critical' | 'unknown'
+
+export type EnemyTheme =
+  | 'air'
+  | 'submarine'
+  | 'surface'
+  | 'transport'
+  | 'land'
+  | 'generic'
+
+export type BattleShape = 'single_engagement' | 'multi_node' | 'practice' | 'withdrawal'
+
+export type AirPresence = 'present' | 'absent'
+
+export type StandoutActor = 'mvp' | 'flagship' | 'none'
+
+export type MissionTone = 'completion' | 'practice' | 'withdrawal'
+
+export type NarrativeTags = {
+  outcomeTone: OutcomeTone
+  damageTone: DamageTone
+  enemyTheme: EnemyTheme
+  battleShape: BattleShape
+  airPresence: AirPresence
+  standoutActor: StandoutActor
+  missionTone: MissionTone
+}
+
+export type WarReportSelectionSnapshot = {
+  style: WarReportStyle
+  mainNarrative: MainNarrative
+  fingerprint: number
+  slotFamilies: Record<string, string>
+}
+
 export type AdmiralIdentity = {
   name: string | null
   rankValue: number | null
@@ -174,9 +225,12 @@ export type ReportRenderContext = {
   failureMode: FailureMode
   operationLabel: string
   operationPhrase: string
+  mapLabel: string | null
+  enemyCategory: EnemyCategory
   enemyDisplay: string
   enemyForceLabel: string
   headlineEnemyPhrase: string
+  resultCategory: ResultCategory
   openingEnemyClause: string
   resultPhrase: string
   friendlySummary: string
@@ -193,12 +247,14 @@ export type ReportRenderContext = {
   closingEmphasis: string
   practiceOpponent: string | null
   winRank: string | null
+  sawAirAttack: boolean
   nodeCount: number
 }
 
 export type GeneratedWarReport = {
   bulletin: string
   body: string
+  selectionSnapshot?: WarReportSelectionSnapshot
 }
 
 export type WarReportRenderOptions = {
@@ -206,6 +262,7 @@ export type WarReportRenderOptions = {
   addressSnapshot?: AddressSnapshot | null
   truthSource?: WarReportTruthSource | null
   recentReports?: Partial<Record<WarReportStyle, GeneratedWarReport[]>>
+  recentSelections?: Partial<Record<WarReportStyle, WarReportSelectionSnapshot[]>>
 }
 
 export type WarReportHistoryEntry = {
@@ -219,6 +276,7 @@ export type WarReportHistoryEntry = {
   variantSeed?: number
   addressSnapshot?: AddressSnapshot | null
   truthSource?: WarReportTruthSource | null
+  selectionSnapshots?: Partial<Record<WarReportStyle, WarReportSelectionSnapshot>>
 }
 
 export type WarReportHistoryState = {

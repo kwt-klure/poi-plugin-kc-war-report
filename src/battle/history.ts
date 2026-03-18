@@ -8,6 +8,8 @@ import type {
   WarReportHistoryEntry,
   WarReportHistoryState,
   WarReportHistoryView,
+  WarReportSelectionSnapshot,
+  WarReportStyle,
   WarReportTruthSource,
 } from './types'
 
@@ -86,9 +88,52 @@ const isValidTruthSource = (value: unknown): value is WarReportTruthSource => {
   return false
 }
 
+const WAR_REPORT_STYLES: WarReportStyle[] = [
+  'standard_bulletin',
+  'short_bulletin',
+  'formal_after_action',
+]
+
+const isValidSelectionSnapshot = (value: unknown): value is WarReportSelectionSnapshot => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Partial<WarReportSelectionSnapshot>
+  return Boolean(
+    candidate.style &&
+      WAR_REPORT_STYLES.includes(candidate.style) &&
+      typeof candidate.mainNarrative === 'string' &&
+      typeof candidate.fingerprint === 'number' &&
+      candidate.slotFamilies &&
+      typeof candidate.slotFamilies === 'object' &&
+      !Array.isArray(candidate.slotFamilies),
+  )
+}
+
+const normalizeSelectionSnapshots = (
+  snapshots: Partial<Record<WarReportStyle, WarReportSelectionSnapshot>> | null | undefined,
+) =>
+  snapshots
+    ? Object.fromEntries(
+        Object.entries(snapshots).filter(
+          ([style, snapshot]) =>
+            WAR_REPORT_STYLES.includes(style as WarReportStyle) &&
+            isValidSelectionSnapshot(snapshot),
+        ),
+      ) as Partial<Record<WarReportStyle, WarReportSelectionSnapshot>>
+    : undefined
+
 const normalizeEntry = (entry: WarReportHistoryEntry): WarReportHistoryEntry => {
   const renderedReports = entry.renderedReports ?? { standard_bulletin: entry.report }
   const defaultAddressSnapshot = buildFormalAddressSnapshot()
+  const selectionSnapshots = normalizeSelectionSnapshots(
+    entry.selectionSnapshots ?? {
+      standard_bulletin: renderedReports.standard_bulletin?.selectionSnapshot,
+      short_bulletin: renderedReports.short_bulletin?.selectionSnapshot,
+      formal_after_action: renderedReports.formal_after_action?.selectionSnapshot,
+    },
+  )
 
   return {
     ...entry,
@@ -96,6 +141,7 @@ const normalizeEntry = (entry: WarReportHistoryEntry): WarReportHistoryEntry => 
     variantSeed: typeof entry.variantSeed === 'number' ? entry.variantSeed : undefined,
     addressSnapshot: entry.addressSnapshot ?? defaultAddressSnapshot,
     truthSource: isValidTruthSource(entry.truthSource) ? entry.truthSource : null,
+    selectionSnapshots,
   }
 }
 

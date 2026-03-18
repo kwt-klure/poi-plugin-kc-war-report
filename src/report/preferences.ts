@@ -183,10 +183,8 @@ export const buildFormalAddressSnapshot = (
   const admiral = overrideAdmiral === undefined ? getDetectedAdmiralIdentity() : overrideAdmiral
   const canUseDetectedSender =
     currentPreferences.useDetectedAdmiralSender && Boolean(admiral?.name)
-  const admiralDisplayName =
-    admiral?.name && admiral.name.endsWith('提督') ? admiral.name : `${admiral?.name ?? ''}提督`
   const senderDisplay = canUseDetectedSender
-    ? `${admiral?.rankLabel ? `${admiral.rankLabel} ` : ''}${admiralDisplayName}`
+    ? `${admiral?.rankLabel ? `${admiral.rankLabel} ` : ''}${admiral?.name ?? ''}`
     : currentPreferences.formalSenderFallback
 
   return {

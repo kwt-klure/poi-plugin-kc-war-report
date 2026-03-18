@@ -289,12 +289,13 @@ const buildSortieHistoryEntry = (
   status: 'completed' | 'failed',
 ) => {
   const record = normalizeSortieSession(session, status)
-  const { variantSeed, addressSnapshot, renderedReports } = buildRenderedReportsForHistoryEntry(
-    record,
-    { kind: 'sortie', sortie: session },
-    buildFormalAddressSnapshot(),
-    getWarReportHistoryView().entries,
-  )
+  const { variantSeed, addressSnapshot, renderedReports, selectionSnapshots } =
+    buildRenderedReportsForHistoryEntry(
+      record,
+      { kind: 'sortie', sortie: session },
+      buildFormalAddressSnapshot(),
+      getWarReportHistoryView().entries,
+    )
   return {
     id: `sortie:${session.id}:${status}`,
     capturedAt: status === 'completed' ? Date.now() : session.updatedAt,
@@ -309,17 +310,19 @@ const buildSortieHistoryEntry = (
       kind: 'sortie' as const,
       sortie: session,
     },
+    selectionSnapshots,
   }
 }
 
 const buildPracticeHistoryEntry = (capture: BattleCapture) => {
   const record = normalizePracticeCapture(capture)
-  const { variantSeed, addressSnapshot, renderedReports } = buildRenderedReportsForHistoryEntry(
-    record,
-    { kind: 'practice', practice: capture },
-    buildFormalAddressSnapshot(),
-    getWarReportHistoryView().entries,
-  )
+  const { variantSeed, addressSnapshot, renderedReports, selectionSnapshots } =
+    buildRenderedReportsForHistoryEntry(
+      record,
+      { kind: 'practice', practice: capture },
+      buildFormalAddressSnapshot(),
+      getWarReportHistoryView().entries,
+    )
   return {
     id: `practice:${record.occurredAt}:${record.practiceOpponent ?? ''}`,
     capturedAt: record.occurredAt,
@@ -334,6 +337,7 @@ const buildPracticeHistoryEntry = (capture: BattleCapture) => {
       kind: 'practice' as const,
       practice: capture,
     },
+    selectionSnapshots,
   }
 }
 
