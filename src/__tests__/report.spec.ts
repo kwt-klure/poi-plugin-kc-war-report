@@ -15,13 +15,13 @@ import type {
 import { buildWarReportFromRecord } from '../report/render'
 
 const formalAddressSnapshot: AddressSnapshot = {
-  senderLine: '発：少将 テスト',
+  senderLine: '発：海軍少将 テスト',
   recipientLine: '宛：聯合艦隊司令部',
   usesDetectedAdmiralSender: true,
   detectedAdmiral: {
     name: 'テスト',
     rankValue: 4,
-    rankLabel: '少将',
+    rankLabel: '海軍少将',
   },
 }
 
@@ -264,7 +264,7 @@ describe('war report sortie architecture', () => {
 
     expect(standard.body).toContain('【大本営海軍報道部発表】')
     expect(formal.bulletin).toContain('戦闘詳報')
-    expect(formal.body).toContain('発：少将 テスト')
+    expect(formal.body).toContain('発：海軍少将 テスト')
     expect(formal.body).toContain('宛：聯合艦隊司令部')
     expect(formal.body).toContain('【第二交戦点】')
     expect(formal.body).not.toContain('Node 2')

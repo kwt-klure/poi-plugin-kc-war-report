@@ -30,6 +30,19 @@ const ADMIRAL_RANK_LABELS: Record<number, string> = {
   12: '新米少佐',
 }
 
+const withNavyRankPrefix = (rankLabel: string | null | undefined) => {
+  const trimmed = rankLabel?.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  if (trimmed === '元帥') {
+    return '元帥海軍大将'
+  }
+
+  return trimmed.startsWith('海軍') ? trimmed : `海軍${trimmed}`
+}
+
 let loaded = false
 let preferences = DEFAULT_PREFERENCES
 let detectedAdmiral: AdmiralIdentity | null = null
@@ -101,7 +114,7 @@ const withPrefix = (prefix: string, value: string) => {
 }
 
 export const resolveAdmiralRankLabel = (rankValue: number | null | undefined) =>
-  rankValue == null ? null : ADMIRAL_RANK_LABELS[rankValue] ?? null
+  rankValue == null ? null : withNavyRankPrefix(ADMIRAL_RANK_LABELS[rankValue] ?? null)
 
 export const getWarReportAddressPreferences = () => {
   ensureLoaded()
@@ -152,7 +165,7 @@ export const setDetectedAdmiralIdentity = (identity: AdmiralIdentity | null) => 
       ? {
           name: identity.name.trim() || null,
           rankValue: identity.rankValue ?? null,
-          rankLabel: identity.rankLabel ?? resolveAdmiralRankLabel(identity.rankValue),
+          rankLabel: withNavyRankPrefix(identity.rankLabel) ?? resolveAdmiralRankLabel(identity.rankValue),
         }
       : null
 

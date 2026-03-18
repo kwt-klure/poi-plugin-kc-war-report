@@ -76,13 +76,26 @@ describe('formal report addressing preferences', () => {
     setDetectedAdmiralIdentity({
       name: '夜詠',
       rankValue: 4,
-      rankLabel: '少将',
+      rankLabel: '海軍少将',
     })
 
     const snapshot = buildFormalAddressSnapshot()
 
-    expect(snapshot.senderLine).toBe('発：少将 夜詠')
+    expect(snapshot.senderLine).toBe('発：海軍少将 夜詠')
     expect(snapshot.recipientLine).toBe('宛：聯合艦隊司令部')
+    expect(snapshot.usesDetectedAdmiralSender).toBe(true)
+  })
+
+  it('expands marshal rank into the historical full title', () => {
+    setDetectedAdmiralIdentity({
+      name: 'Idril',
+      rankValue: 1,
+      rankLabel: '元帥',
+    })
+
+    const snapshot = buildFormalAddressSnapshot()
+
+    expect(snapshot.senderLine).toBe('発：元帥海軍大将 Idril')
     expect(snapshot.usesDetectedAdmiralSender).toBe(true)
   })
 })
