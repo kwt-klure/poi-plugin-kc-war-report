@@ -82,6 +82,78 @@ The plugin has two different truth policies.
 - 大本営が対外発表する公告文
 - 誇張、損害の矮小化、 tone の歪曲を許容
 
+## Why Three Document Voices Exist
+
+These three document styles are not just longer and shorter versions of the same text.
+
+They exist because they speak to different readers:
+
+- `硬派詳報`
+  - written upward
+  - a front-line report for command
+  - truth-first, even when the result is ugly
+- `標準公報`
+  - written outward
+  - a headquarters-style public announcement
+  - orderly, official, and politically filtered
+- `短報`
+  - written to be repeated, excerpted, and circulated
+  - closer to a clipped bulletin than a paragraph summary
+  - the most shameless voice in the plugin
+
+In other words, the point is not "one report in three lengths".
+The point is "one sortie seen through three different bureaucratic masks".
+
+この三種類の document style は、単なる長文版 / 短文版ではありません。
+
+読む相手が違うからです。
+
+- `硬派詳報`
+  - 上申文
+  - 前線から上級司令部へ送る報告
+  - 結果が苦しくても truth-first
+- `標準公報`
+  - 対外公告
+  - 大本営風の正式発表
+  - 整った官僚文体で、政治的に加工される
+- `短報`
+  - 引用・転載・流布されることを前提にした短い bulletin
+  - 段落 summary より dispatch に近い
+  - この plugin の中で最も shameless な声
+
+つまり狙いは「一つの report を三段階の長さにする」ことではなく、
+「一つの sortie を三つの官僚的な仮面で見せる」ことにあります。
+
+## Why The Short Bulletin Is Fun
+
+In one sense, even the headquarters-style public text still sounds like something written for military readers before it reaches newspapers.
+
+That is why `短報` is intentionally terse, rigid, and overconfident.
+It is supposed to sound like a bulletin that could be clipped, quoted, or passed around while ignoring the uncomfortable details.
+
+The humor target is the deadpan mismatch:
+
+- the fleet may come home dented
+- ships may already be lining up for repairs
+- but the short bulletin still declares that enemy intent was crushed and valor deserves celebration
+
+That mismatch is not an accident.
+It is a core part of the plugin's "for fun" voice.
+
+ある意味では、大本営風の public text も、新聞に載る前の時点ではまだ「軍人が読む文」の匂いを残しています。
+
+だから `短報` は、わざと短く、硬く、妙に自信過剰にしてあります。
+段落を縮めた summary ではなく、切り抜かれ、引用され、回覧される bulletin のつもりで書かれています。
+
+笑いどころは、その真顔の食い違いです。
+
+- 艦隊は傷だらけで帰ってくるかもしれない
+- 何隻かはそのまま入渠かもしれない
+- それでも短報は「敵企図ヲ粉砕」「偉功ニ対シ慶祝ノ意ヲ表ス」と平然と書く
+
+この食い違いは偶然ではありません。
+この plugin の "for fun" な声の中心です。
+
 ## What It Does Now
 
 ### 1. Live sortie documents
