@@ -361,6 +361,53 @@ describe('war report sortie architecture', () => {
     expect(short.body).not.toContain('中破艦')
   })
 
+  it('varies formal node-level narration across similar engagements', () => {
+    const repeatedBattleSortie: SortieSessionCapture = {
+      ...airPowerSortieSession,
+      id: 'sortie-3',
+      nodeTrail: ['Node 3', 'Node 4', 'Node 8'],
+      battles: [
+        airPowerBattle,
+        {
+          ...airPowerBattle,
+          occurredAt: Date.UTC(2026, 2, 14, 6, 12, 0),
+          nodeLabel: 'Node 4',
+        },
+        {
+          ...airPowerBattle,
+          occurredAt: Date.UTC(2026, 2, 14, 6, 15, 0),
+          nodeLabel: 'Node 8',
+        },
+      ],
+    }
+
+    const formal = buildWarReportFromRecord(
+      normalizeSortieSession(repeatedBattleSortie, 'completed'),
+      'formal_after_action',
+      {
+        truthSource: {
+          kind: 'sortie',
+          sortie: repeatedBattleSortie,
+        },
+        addressSnapshot: formalAddressSnapshot,
+      },
+    )
+
+    const resultLines = formal.body.match(/　交戦結果　.+/g) ?? []
+    const overviewLines = formal.body.match(/　交戦概要　.+/g) ?? []
+    const damageLines = formal.body.match(/　我方被害　.+/g) ?? []
+    const postBattleLines = formal.body.match(/　戦闘後判定　.+/g) ?? []
+
+    expect(resultLines).toHaveLength(3)
+    expect(overviewLines).toHaveLength(3)
+    expect(damageLines).toHaveLength(3)
+    expect(postBattleLines).toHaveLength(3)
+    expect(new Set(resultLines).size).toBeGreaterThan(1)
+    expect(new Set(overviewLines).size).toBeGreaterThan(1)
+    expect(new Set(damageLines).size).toBeGreaterThan(1)
+    expect(new Set(postBattleLines).size).toBeGreaterThan(1)
+  })
+
   it('renders retreat failures differently across the three styles without fabricating ammo counts', () => {
     const failedSortie = {
       ...sortieSession,

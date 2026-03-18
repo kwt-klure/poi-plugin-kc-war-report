@@ -122,6 +122,41 @@ describe('war report history store', () => {
     expect(entry?.selectionSnapshots?.standard_bulletin).toEqual(baseSelectionSnapshot)
   })
 
+  it('repairs persisted marshal sender wording in address snapshots and formal bodies', () => {
+    appendWarReportHistoryEntry({
+      capturedAt: baseRecord.occurredAt,
+      entryType: 'sortie',
+      status: 'completed',
+      record: baseRecord,
+      report: baseReport,
+      addressSnapshot: {
+        senderLine: '発：海軍元帥海軍大将 Idril',
+        recipientLine: '宛：聯合艦隊司令部',
+        usesDetectedAdmiralSender: true,
+        detectedAdmiral: {
+          name: 'Idril',
+          rankValue: 1,
+          rankLabel: '海軍元帥海軍大将',
+        },
+      },
+      renderedReports: {
+        standard_bulletin: baseReport,
+        formal_after_action: {
+          bulletin: '戦闘詳報',
+          body: '発：海軍元帥海軍大将 Idril\n宛：聯合艦隊司令部\n\n以上',
+        },
+      },
+    })
+
+    const entry = getWarReportHistoryView().latestEntry
+    expect(entry?.addressSnapshot?.senderLine).toBe('発：元帥海軍大将 Idril')
+    expect(entry?.addressSnapshot?.detectedAdmiral?.rankLabel).toBe('元帥海軍大将')
+    expect(entry?.renderedReports?.formal_after_action?.body).toContain('発：元帥海軍大将 Idril')
+    expect(entry?.renderedReports?.formal_after_action?.body).not.toContain(
+      '発：海軍元帥海軍大将 Idril',
+    )
+  })
+
   it('returns a stable snapshot reference until store state changes', () => {
     const firstView = getWarReportHistoryView()
     const secondView = getWarReportHistoryView()

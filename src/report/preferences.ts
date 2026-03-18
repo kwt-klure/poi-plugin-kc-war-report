@@ -30,21 +30,60 @@ const ADMIRAL_RANK_LABELS: Record<number, string> = {
   12: '新米少佐',
 }
 
-const withNavyRankPrefix = (rankLabel: string | null | undefined) => {
+export const normalizeAdmiralRankLabel = (rankLabel: string | null | undefined) => {
   const trimmed = rankLabel?.trim()
   if (!trimmed) {
     return null
   }
 
-  if (trimmed === '元帥') {
+  if (
+    trimmed === '元帥' ||
+    trimmed === '元帥海軍大将' ||
+    trimmed === '海軍元帥海軍大将'
+  ) {
     return '元帥海軍大将'
   }
 
-  if (trimmed === '元帥海軍大将') {
-    return trimmed
+  return trimmed.startsWith('海軍') ? trimmed : `海軍${trimmed}`
+}
+
+const normalizeAdmiralIdentity = (identity: AdmiralIdentity | null | undefined): AdmiralIdentity | null =>
+  identity && identity.name
+    ? {
+        name: identity.name.trim() || null,
+        rankValue: identity.rankValue ?? null,
+        rankLabel:
+          normalizeAdmiralRankLabel(identity.rankLabel) ??
+          resolveAdmiralRankLabel(identity.rankValue),
+      }
+    : null
+
+const buildDetectedSenderDisplay = (admiral: AdmiralIdentity | null | undefined) => {
+  const normalized = normalizeAdmiralIdentity(admiral)
+  return normalized
+    ? `${normalized.rankLabel ? `${normalized.rankLabel} ` : ''}${normalized.name ?? ''}`
+    : null
+}
+
+export const normalizeFormalSenderLine = (senderLine: string | null | undefined) => {
+  const trimmed = senderLine?.trim()
+  if (!trimmed) {
+    return withPrefix('発', DEFAULT_PREFERENCES.formalSenderFallback)
   }
 
-  return trimmed.startsWith('海軍') ? trimmed : `海軍${trimmed}`
+  const rawValue = trimmed.replace(/^発\s*[:：]?\s*/, '').trim()
+  const marshalSuffix = rawValue.replace(/^海軍元帥海軍大将(?=\s|$)/, '元帥海軍大将')
+  const match = marshalSuffix.match(
+    /^(?:(海軍元帥海軍大将|元帥海軍大将|元帥|海軍[^\s]+|[^\s]+)\s+)?(.+)$/,
+  )
+
+  if (!match) {
+    return withPrefix('発', marshalSuffix)
+  }
+
+  const normalizedRank = normalizeAdmiralRankLabel(match[1] ?? null)
+  const name = match[2]?.trim() ?? ''
+  return withPrefix('発', `${normalizedRank ? `${normalizedRank} ` : ''}${name}`)
 }
 
 let loaded = false
@@ -118,7 +157,7 @@ const withPrefix = (prefix: string, value: string) => {
 }
 
 export const resolveAdmiralRankLabel = (rankValue: number | null | undefined) =>
-  rankValue == null ? null : withNavyRankPrefix(ADMIRAL_RANK_LABELS[rankValue] ?? null)
+  rankValue == null ? null : normalizeAdmiralRankLabel(ADMIRAL_RANK_LABELS[rankValue] ?? null)
 
 export const getWarReportAddressPreferences = () => {
   ensureLoaded()
@@ -164,14 +203,7 @@ export const useWarReportAddressPreferences = () =>
 export const getDetectedAdmiralIdentity = () => detectedAdmiral
 
 export const setDetectedAdmiralIdentity = (identity: AdmiralIdentity | null) => {
-  const normalized =
-    identity && identity.name
-      ? {
-          name: identity.name.trim() || null,
-          rankValue: identity.rankValue ?? null,
-          rankLabel: withNavyRankPrefix(identity.rankLabel) ?? resolveAdmiralRankLabel(identity.rankValue),
-        }
-      : null
+  const normalized = normalizeAdmiralIdentity(identity)
 
   if (
     normalized?.name === detectedAdmiral?.name &&
@@ -197,15 +229,17 @@ export const buildFormalAddressSnapshot = (
   overrideAdmiral?: AdmiralIdentity | null,
 ): AddressSnapshot => {
   const currentPreferences = overridePreferences ?? getWarReportAddressPreferences()
-  const admiral = overrideAdmiral === undefined ? getDetectedAdmiralIdentity() : overrideAdmiral
+  const admiral = normalizeAdmiralIdentity(
+    overrideAdmiral === undefined ? getDetectedAdmiralIdentity() : overrideAdmiral,
+  )
   const canUseDetectedSender =
     currentPreferences.useDetectedAdmiralSender && Boolean(admiral?.name)
   const senderDisplay = canUseDetectedSender
-    ? `${admiral?.rankLabel ? `${admiral.rankLabel} ` : ''}${admiral?.name ?? ''}`
+    ? buildDetectedSenderDisplay(admiral) ?? currentPreferences.formalSenderFallback
     : currentPreferences.formalSenderFallback
 
   return {
-    senderLine: withPrefix('発', senderDisplay),
+    senderLine: normalizeFormalSenderLine(withPrefix('発', senderDisplay)),
     recipientLine: withPrefix('宛', currentPreferences.formalRecipient),
     usesDetectedAdmiralSender: canUseDetectedSender,
     detectedAdmiral: admiral ?? null,

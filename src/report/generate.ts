@@ -1092,35 +1092,97 @@ const buildFormalFindings = (
 
 const buildFormalEngagementOverview = (
   battle: BattleNodeCapture,
+  index: number,
   family: FormalEngagementFamily,
   seed: number,
 ) =>
   battle.sawAirAttack
-    ? pickVariant(seed, `formal_after_action:engagementOverview:${family.id}:air`, family.airVariants)
+    ? pickVariant(
+        seed,
+        `formal_after_action:engagementOverview:${family.id}:air:${parseNodeNumber(battle) ?? index + 1}`,
+        family.airVariants,
+      )
     : pickVariant(
         seed,
-        `formal_after_action:engagementOverview:${family.id}:surface`,
+        `formal_after_action:engagementOverview:${family.id}:surface:${parseNodeNumber(battle) ?? index + 1}`,
         family.surfaceVariants,
       )
 
-const buildFormalResultSentenceFromRank = (winRank: string | null) => {
-  if (winRank === 'S') {
-    return '敵ニ甚大ナル打撃ヲ与ヘ、我行動概ネ所期ノ通リ。'
+const buildFormalResultSentenceFromRank = (
+  battle: BattleNodeCapture,
+  index: number,
+  seed: number,
+) => {
+  const slot = `formal_after_action:nodeResult:${battle.winRank ?? 'unknown'}:${parseNodeNumber(
+    battle,
+  ) ?? index + 1}`
+
+  if (battle.winRank === 'S') {
+    return pickVariant(seed, slot, [
+      '敵ニ甚大ナル打撃ヲ与ヘ、我行動概ネ所期ノ通リ。',
+      '敵ニ大打撃ヲ与ヘ、交戦経過概ネ順調ナリ。',
+      '敵ニ有効ナル打撃ヲ累加シ、所定行動概ネ支障ナシ。',
+    ])
   }
 
-  if (winRank === 'A') {
-    return '敵ニ有効打撃ヲ与ヘ、所定行動ヲ完遂。'
+  if (battle.winRank === 'A') {
+    return pickVariant(seed, slot, [
+      '敵ニ有効打撃ヲ与ヘ、所定行動ヲ完遂。',
+      '敵ニ打撃ヲ与ヘ、我任務行動概ネ順調ナリ。',
+      '敵ニ打撃ヲ与ヘ、交戦目的ニ照ラシ概ネ良好ナリ。',
+    ])
   }
 
-  if (winRank === 'B') {
-    return '敵ニ打撃ヲ与ヘ、交戦目的ニ資ス。'
+  if (battle.winRank === 'B') {
+    return pickVariant(seed, slot, [
+      '敵ニ打撃ヲ与ヘ、交戦目的ニ資ス。',
+      '敵ニ相応ノ打撃ヲ与ヘ、所定行動継続ニ資ス。',
+      '敵ニ打撃ヲ与フルモ、戦果細目ハ更ニ精査ヲ要ス。',
+    ])
   }
 
-  if (winRank === 'C' || winRank === 'D' || winRank === 'E') {
-    return '敵ト交戦、戦果並被害ノ精査ヲ要ス。'
+  if (battle.winRank === 'C' || battle.winRank === 'D' || battle.winRank === 'E') {
+    return pickVariant(seed, slot, [
+      '敵ト交戦、戦果並被害ノ精査ヲ要ス。',
+      '敵ト交戦、戦果判明尚早ナリ。',
+      '敵ト交戦、交戦結果ニ付更ナル検討ヲ要ス。',
+    ])
   }
 
-  return '敵ト交戦、戦果並被害ノ精査ヲ要ス。'
+  return pickVariant(seed, slot, [
+    '敵ト交戦、戦果並被害ノ精査ヲ要ス。',
+    '敵ト交戦、交戦結果細目未詳。',
+    '敵ト交戦、経過概略ノ把握ニ止マル。',
+  ])
+}
+
+const buildFormalOwnDamageSentence = (battle: BattleNodeCapture, index: number, seed: number) => {
+  if (battle.damageSummary.severity !== 'none') {
+    return sanitizeDamageDetail(battle.damageSummary.detail)
+  }
+
+  return pickVariant(
+    seed,
+    `formal_after_action:nodeDamage:none:${parseNodeNumber(battle) ?? index + 1}`,
+    ['被害認メズ。', '我方損害ナシ。', '損傷艦ヲ認メズ。'],
+  )
+}
+
+const buildFormalPostBattleLine = (battle: BattleNodeCapture, index: number, seed: number) => {
+  if (!battle.mvpNameRaw) {
+    return null
+  }
+
+  const normalizedName = normalizeFriendlyReportName(battle.mvpNameRaw)
+  return pickVariant(
+    seed,
+    `formal_after_action:nodePostBattle:${parseNodeNumber(battle) ?? index + 1}`,
+    [
+      `　戦闘後判定　「${normalizedName}」殊勲艦。`,
+      `　戦闘後判定　「${normalizedName}」殊勲ト認ム。`,
+      `　戦闘後判定　「${normalizedName}」殊勲艦ト認定。`,
+    ],
+  )
 }
 
 const buildFormalOverallResultSentence = (context: ReportRenderContext) => {
@@ -1162,17 +1224,14 @@ const buildFormalNodeLines = (
     buildFormalNodeLabel(battle, index),
     `　交戦時刻　${toJapaneseTime(battle.occurredAt)}`,
     `　敵情　${buildFormalEnemySummary(battle, context)}`,
-    `　交戦結果　${buildFormalResultSentenceFromRank(battle.winRank)}`,
-    `　交戦概要　${buildFormalEngagementOverview(battle, engagementFamily, seed)}`,
-    `　我方被害　${
-      battle.damageSummary.severity === 'none'
-        ? '被害認メズ。'
-        : sanitizeDamageDetail(battle.damageSummary.detail)
-    }`,
+    `　交戦結果　${buildFormalResultSentenceFromRank(battle, index, seed)}`,
+    `　交戦概要　${buildFormalEngagementOverview(battle, index, engagementFamily, seed)}`,
+    `　我方被害　${buildFormalOwnDamageSentence(battle, index, seed)}`,
   ]
 
-  if (battle.mvpNameRaw) {
-    lines.push(`　戦闘後判定　「${normalizeFriendlyReportName(battle.mvpNameRaw)}」殊勲艦。`)
+  const postBattleLine = buildFormalPostBattleLine(battle, index, seed)
+  if (postBattleLine) {
+    lines.push(postBattleLine)
   }
 
   return lines

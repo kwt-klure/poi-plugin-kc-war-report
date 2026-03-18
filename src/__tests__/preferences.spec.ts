@@ -111,4 +111,17 @@ describe('formal report addressing preferences', () => {
     expect(snapshot.senderLine).toBe('発：元帥海軍大将 Idril')
     expect(snapshot.senderLine).not.toContain('海軍元帥海軍大将')
   })
+
+  it('repairs a previously double-prefixed marshal title', () => {
+    setDetectedAdmiralIdentity({
+      name: 'Idril',
+      rankValue: 1,
+      rankLabel: '海軍元帥海軍大将',
+    })
+
+    const snapshot = buildFormalAddressSnapshot()
+
+    expect(snapshot.senderLine).toBe('発：元帥海軍大将 Idril')
+    expect(snapshot.senderLine).not.toContain('海軍元帥海軍大将')
+  })
 })

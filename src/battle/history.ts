@@ -1,8 +1,13 @@
 import { useSyncExternalStore } from 'react'
 
 import { PACKAGE_NAME } from '../poi/env'
-import { buildFormalAddressSnapshot } from '../report/preferences'
+import {
+  buildFormalAddressSnapshot,
+  normalizeAdmiralRankLabel,
+  normalizeFormalSenderLine,
+} from '../report/preferences'
 import type {
+  AddressSnapshot,
   BattleCapture,
   SortieSessionCapture,
   WarReportHistoryEntry,
@@ -124,8 +129,37 @@ const normalizeSelectionSnapshots = (
       ) as Partial<Record<WarReportStyle, WarReportSelectionSnapshot>>
     : undefined
 
+const normalizeRenderedFormalBody = (body: string | null | undefined) =>
+  typeof body === 'string'
+    ? body.replace(/発：海軍元帥海軍大将(?=\s)/g, '発：元帥海軍大将')
+    : body
+
+const normalizeAddressSnapshot = (
+  snapshot: WarReportHistoryEntry['addressSnapshot'] | null | undefined,
+  fallback: AddressSnapshot,
+): AddressSnapshot => {
+  if (!snapshot) {
+    return fallback
+  }
+
+  const detectedAdmiral = snapshot.detectedAdmiral
+    ? {
+        ...snapshot.detectedAdmiral,
+        rankLabel: normalizeAdmiralRankLabel(snapshot.detectedAdmiral.rankLabel),
+      }
+    : null
+
+  return {
+    ...snapshot,
+    senderLine: normalizeFormalSenderLine(snapshot.senderLine),
+    detectedAdmiral,
+  }
+}
+
 const normalizeEntry = (entry: WarReportHistoryEntry): WarReportHistoryEntry => {
-  const renderedReports = entry.renderedReports ?? { standard_bulletin: entry.report }
+  const renderedReports = {
+    ...(entry.renderedReports ?? { standard_bulletin: entry.report }),
+  }
   const defaultAddressSnapshot = buildFormalAddressSnapshot()
   const selectionSnapshots = normalizeSelectionSnapshots(
     entry.selectionSnapshots ?? {
@@ -134,12 +168,20 @@ const normalizeEntry = (entry: WarReportHistoryEntry): WarReportHistoryEntry => 
       formal_after_action: renderedReports.formal_after_action?.selectionSnapshot,
     },
   )
+  const addressSnapshot = normalizeAddressSnapshot(entry.addressSnapshot, defaultAddressSnapshot)
+
+  if (renderedReports.formal_after_action) {
+    renderedReports.formal_after_action = {
+      ...renderedReports.formal_after_action,
+      body: normalizeRenderedFormalBody(renderedReports.formal_after_action.body) ?? '',
+    }
+  }
 
   return {
     ...entry,
     renderedReports,
     variantSeed: typeof entry.variantSeed === 'number' ? entry.variantSeed : undefined,
-    addressSnapshot: entry.addressSnapshot ?? defaultAddressSnapshot,
+    addressSnapshot,
     truthSource: isValidTruthSource(entry.truthSource) ? entry.truthSource : null,
     selectionSnapshots,
   }
