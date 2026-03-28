@@ -433,10 +433,10 @@ const buildPublicBodyLead = (
 ) =>
   pickVariant(seed, `${style}:bodyLead`, [
     context.compositionSentence,
-    `当時我兵力ハ、${context.friendlySummary}ヲ基幹トシ、旗艦「${
+    `当時我部隊兵力ハ、${context.friendlySummary}ヲ基幹トシ、旗艦「${
       context.flagshipDisplay ?? '不詳'
-    }」ノ下ニ整然作戦行動ヲ継続セリ。`,
-    `我部隊ハ、${context.friendlySummary}ヲ以テ編成セラレ、敵情変化ニ即応シ得ル態勢ヲ保持セリ。`,
+    }」ノ下ニ整斉ナル作戦行動ヲ継続セリ。`,
+    `我部隊ハ、${context.friendlySummary}ヲ以テ編成セラレ、各艦相互ニ緊密ナル協同ヲ保持セリ。`,
   ])
 
 const buildMvpClause = (
@@ -500,9 +500,9 @@ const buildHistoricalStandardHeadlineFamilies = (
     profile.officialOutcome === 'claimed_battlefield_contribution' && {
       id: 'historical-standard-headline-contribution',
       variants: [
-        `${context.operationPhrase}方面作戦、敢闘ノ裡戦果顕著`,
+        `${context.operationPhrase}方面作戦、敢闘ノ裡敵ニ打撃`,
         `${context.operationPhrase}方面交戦、敵ニ打撃ヲ加フ`,
-        `${context.operationPhrase}方面作戦、敵企図ヲ抑止`,
+        `${context.operationPhrase}方面作戦、敵企図ニ制肘`,
       ],
     },
     profile.officialOutcome === 'claimed_crushing_blow' && {
@@ -577,9 +577,9 @@ const buildHistoricalStandardSubheadlineFamilies = (
     {
       id: 'historical-standard-subheadline-general',
       variants: [
-        '敵ニ大ナル戦果ヲ収メタリ',
-        '敵企図ヲ挫折セシメ作戦成果ヲ拡張セリ',
-        '敵部隊ニ打撃ヲ加ヘタリ',
+        '敵ニ打撃ヲ加ヘ所定成果ヲ収メタリ',
+        '敵企図ヲ挫折セシメ所定成果ヲ確保セリ',
+        '敵部隊ニ制肘ヲ加ヘタリ',
       ],
     },
   ])
@@ -853,17 +853,17 @@ const buildPublicHeatedClosingFamilies = (
     profile.rhetoricHeat === 'maximal' && {
       id: `${style}-closing-maximal`,
       variants: [
-        `${mvpClause}戦果顕著ナリ。`,
+        `${mvpClause}本戦果ヲ録ス。`,
         `${mvpClause}偉功ニ対シ慶祝ノ意ヲ表ス。`,
-        `${mvpClause}一層ノ健闘ヲ祈ル。`,
+        `${mvpClause}右、発表ス。`,
       ],
     },
     {
       id: `${style}-closing-official`,
       variants: [
         `${mvpClause}大本営海軍部ハ本行動ノ成果ヲ公表ス。`,
-        `${mvpClause}大本営海軍部ハ本行動ノ成果概要左ノ如ク発表セリ。`,
-        `${mvpClause}本行動ノ成果ハ爾後ノ作戦遂行ニ資スル所アリ。`,
+        `${mvpClause}大本営海軍部ハ本行動ノ成果概要左ノ如ク発表ス。`,
+        `${mvpClause}右、本行動ノ概要ヲ公表ス。`,
       ],
     },
   ])
@@ -1165,17 +1165,17 @@ const buildStandardResultOpeningFamilies = (
     profile.officialOutcome === 'claimed_operational_success' && {
       id: 'result-operational-success',
       variants: [
-        '我部隊ハ敵企図ヲ挫折セシメ、作戦成果確保ニ成功セリ。',
-        '我部隊ノ行動沈着機敏ニシテ、所定成果ヲ保持シ得タリ。',
-        '我部隊ハ戦局推移ヲ有利ニ導キ、次段行動ニ資スル成果ヲ収メタリ。',
+        '我部隊ハ敵企図ヲ挫折セシメ、所定成果ヲ保持セリ。',
+        '我部隊ノ行動沈着機敏ニシテ、所定行動概ネ整然タリ。',
+        '我部隊ハ各艦協同ノ下、次段行動ニ資スル成果ヲ収メタリ。',
       ],
     },
     profile.officialOutcome === 'claimed_battlefield_contribution' && {
       id: 'result-battlefield-contribution',
       variants: [
-        '我部隊ハ敢闘ノ裡敵ニ打撃ヲ与ヘ、戦局進展ニ寄与セリ。',
-        '我部隊ノ奮戦ハ敵企図抑止ニ資シ、作戦成果顕著ナリ。',
-        '我部隊ハ果敢ナル行動ヲ以テ敵ニ圧力ヲ加ヘ、戦局寄与ノ戦果ヲ収メタリ。',
+        '我部隊ハ敢闘ノ裡敵ニ打撃ヲ与ヘ、戦局推移ニ資セリ。',
+        '我部隊ノ奮戦ハ敵企図抑止ニ資シ、所定行動概ネ整然タリ。',
+        '我部隊ハ果敢ナル行動ヲ以テ敵ニ制肘ヲ加ヘ、戦局寄与ノ成果ヲ収メタリ。',
       ],
     },
     profile.enemyFrame === 'air_power' && {
@@ -1205,9 +1205,9 @@ const buildStandardResultOpeningFamilies = (
     {
       id: 'result-mission-completion',
       variants: [
-        '我部隊ハ主導権ヲ掌握シ、作戦成果拡張ニ資スル打撃ヲ与ヘタリ。',
-        '敵ニ対シ迅速果敢ナル攻撃ヲ実施シ、所定行動ノ成果顕著ナリ。',
-        '我部隊ノ行動ハ沈着機敏ニシテ、戦局進展ニ寄与スル所大ナリ。',
+        '我部隊ハ主導権ヲ掌握シ、所定成果ノ保持ニ成功セリ。',
+        '敵ニ対シ迅速果敢ナル攻撃ヲ実施シ、所定行動概ネ順調ナリ。',
+        '我部隊ノ行動ハ沈着機敏ニシテ、各艦協同整斉タリ。',
       ],
     },
   ])
@@ -1429,17 +1429,17 @@ const buildShortClosingFamilies = (
     profile.officialOutcome === 'claimed_crushing_blow' && {
       id: 'short-closing-crushing',
       variants: [
-        `${leaderPrefix}大本営ハ本戦果ヲ高ク評価シ、其成果ヲ広ク公表ス。`,
-        `${leaderPrefix}本成果ハ平素ノ錬成ト敢闘ノ賜ナリ。`,
-        `${leaderPrefix}大本営ハ本戦果ヲ録シ、更ナル活躍ヲ期ス。`,
+        `${leaderPrefix}大本営ハ本戦果ヲ録シ、右発表ス。`,
+        `${leaderPrefix}偉功ニ対シ慶祝ノ意ヲ表ス。`,
+        `${leaderPrefix}右、発表ス。`,
       ],
     },
     {
       id: 'short-closing-general',
       variants: [
         `${leaderPrefix}本成果ハ平素ノ錬成ノ賜ナリ。`,
-        `${leaderPrefix}大本営ハ本成果ヲ重視シ、作戦進展ニ寄与スル所大ナリトス。`,
-        `${leaderPrefix}大本営ハ部隊ノ戦果ヲ録シ、其成果ヲ公表ス。`,
+        `${leaderPrefix}右、発表ス。`,
+        `${leaderPrefix}一層ノ健闘ヲ祈ル。`,
       ],
     },
   ]).map((family) => ({
@@ -1622,8 +1622,8 @@ const buildFormalFindingsFamilies = (context: ReportRenderContext) =>
     context.nodeCount > 1 && {
       id: 'formal-findings-cohesion',
       variants: [
-        '統制保持良好。',
-        '各艦協同概ネ良好。',
+        '統制保持概ネ適切ナリ。',
+        '各艦協同整斉ナリ。',
         '部隊運動概ネ整然タリ。',
       ],
     },
@@ -1631,7 +1631,7 @@ const buildFormalFindingsFamilies = (context: ReportRenderContext) =>
       id: 'formal-findings-initial-response',
       variants: [
         '初動概ネ適切ナリ。',
-        '処置概ネ良好。',
+        '諸般処置概ネ適切ナリ。',
         '部隊行動概ネ適切ナリ。',
       ],
     },
@@ -1758,7 +1758,7 @@ const buildFormalPostBattleLine = (battle: BattleNodeCapture, index: number, see
     seed,
     `formal_after_action:nodePostBattle:${parseNodeNumber(battle) ?? index + 1}`,
     [
-      `　戦闘後判定　「${normalizedName}」殊勲艦。`,
+      `　戦闘後判定　「${normalizedName}」殊勲艦ト認ム。`,
       `　戦闘後判定　「${normalizedName}」殊勲ト認ム。`,
       `　戦闘後判定　「${normalizedName}」殊勲艦ト認定。`,
     ],

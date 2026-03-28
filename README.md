@@ -164,10 +164,12 @@ From a real captured sortie or practice, the plugin can render three document st
   - a formal headquarters-style bulletin
   - public propaganda voice
   - rewrites the real result into a polished public statement
+  - calmer and more orderly than `短報`
 - `短報`
   - a short dispatch / bulletin style report
   - more compressed and more shameless than `標準公報`
   - not just a shorter paragraph, but a bulletin-like structure
+  - often closer to a posted notice or circulated dispatch than to prose
 - `硬派詳報`
   - a truth-first internal report
   - chaptered structure with encounter sections
@@ -179,10 +181,12 @@ From a real captured sortie or practice, the plugin can render three document st
   - 大本営正式公告風
   - public propaganda の声
   - 真実を対外向けの官様文へ加工する
+  - `短報` より秩序立った tone を保つ
 - `短報`
   - 逐号速報 / dispatch 風
   - `標準公報` より短く、尖っており、より露骨に吹く
   - 単なる短縮 prose ではなく bulletin 形式
+  - 場合によっては掲示・通達に近い読感を狙う
 - `硬派詳報`
   - truth-first の内部報告
   - 章立てと交戦点小節を持つ
@@ -410,7 +414,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.8.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.9.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update

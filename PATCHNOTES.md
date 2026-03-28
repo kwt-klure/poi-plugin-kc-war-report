@@ -1,5 +1,59 @@
 # Patch Notes
 
+## 0.4.9
+
+This release is a small voice-tuning patch.
+
+It does **not** change the truth-capture core:
+
+- no runtime capture changes
+- no deck binding changes
+- no admiral identity / rank detection changes
+- no changes to the player-facing sender / recipient data path
+
+Instead, it tightens the writing layer only.
+
+この release は小さな文風調整 patch です。
+
+truth-capture の core には触れていません。
+
+- runtime capture 変更なし
+- deck binding 変更なし
+- 提督 identity / rank 検出変更なし
+- sender / recipient data path 変更なし
+
+今回触れたのは writing layer のみです。
+
+### Changed
+
+- `標準公報`
+  - slightly more bureaucratic and orderly public phrasing
+  - calmer official closing lines
+  - a little less modern-summary wording
+- `短報`
+  - a harder bulletin / posted-notice feel
+  - sharper dispatch-like closings
+- `硬派詳報`
+  - slightly cleaner cold-register findings
+  - more consistent `戦闘後判定` phrasing
+- `README`
+  - clarified why the three document voices exist
+  - clarified why the short bulletin is intentionally funny
+
+### Validation
+
+Checked with:
+
+```bash
+git diff --check
+```
+
+Also smoke-tested the public and formal generators directly with local fixture data to confirm:
+
+- report generation still succeeds
+- the patch only affects wording layers
+- no core admiral / fleet capture paths were modified in this release
+
 ## 0.4.8
 
 This release fixes a truth-layer bug that could mix fleets when the sortie was launched from a non-first deck.
