@@ -441,11 +441,95 @@ describe('war report sortie architecture', () => {
     expect(resultLines).toHaveLength(3)
     expect(overviewLines).toHaveLength(3)
     expect(damageLines).toHaveLength(3)
-    expect(postBattleLines).toHaveLength(3)
+    expect(postBattleLines).toHaveLength(0)
     expect(new Set(resultLines).size).toBeGreaterThan(1)
     expect(new Set(overviewLines).size).toBeGreaterThan(1)
     expect(new Set(damageLines).size).toBeGreaterThan(1)
-    expect(new Set(postBattleLines).size).toBeGreaterThan(1)
+    expect(formal.body).toContain('戦闘後判定ニ於テ「フレッチャー」殊勲艦ト認定。')
+  })
+
+  it('keeps formal damage wording internally consistent when sortie summary has damage but node damage is unclear', () => {
+    const damagedShips = ships.map((ship, index) => ({
+      ...ship,
+      endHp: index === 0 ? 24 : index === 2 ? 23 : ship.endHp,
+    }))
+    const damagedSortie: SortieSessionCapture = {
+      ...sortieSession,
+      id: 'sortie-damage-consistency',
+      friendlyFleetLatest: damagedShips,
+      battles: sortieSession.battles.map((battle) => ({
+        ...battle,
+        damageSummary: buildDamageAssessment(ships),
+      })),
+    }
+
+    const formal = buildWarReportFromRecord(
+      normalizeSortieSession(damagedSortie, 'completed'),
+      'formal_after_action',
+      {
+        truthSource: {
+          kind: 'sortie',
+          sortie: damagedSortie,
+        },
+        addressSnapshot: formalAddressSnapshot,
+      },
+    )
+
+    expect(formal.body).toContain('軽微損傷艦　若干')
+    expect(formal.body).not.toContain('　我方被害　被害認メズ。')
+    expect(formal.body).not.toContain('　我方被害　我方損害ナシ。')
+    expect(formal.body).not.toContain('　我方被害　損傷艦ヲ認メズ。')
+    expect(formal.body).toMatch(/交戦点別細目未詳|節別判定未詳|損傷細目後報/)
+  })
+
+  it('uses 行動総括 for our side summary while keeping 敵情総括 enemy-only in formal reports', () => {
+    const formal = buildWarReportFromRecord(
+      normalizeSortieSession(airPowerSortieSession, 'completed'),
+      'formal_after_action',
+      {
+        truthSource: {
+          kind: 'sortie',
+          sortie: airPowerSortieSession,
+        },
+        addressSnapshot: formalAddressSnapshot,
+      },
+    )
+
+    expect(formal.body).toContain('敵情総括　敵航空兵力ヲ擁スル敵部隊。')
+    expect(formal.body).toContain('行動総括　敵航空兵力ヲ擁スル敵部隊ニ対シ所定ノ戦闘行動ヲ実施。')
+  })
+
+  it('keeps standard bulletin wording calmer than short bulletin rhetoric for main-force claims', () => {
+    const mainForceRecord = normalizeSortieSession(
+      {
+        ...sortieSession,
+        id: 'sortie-main-force-register',
+        operationLabelRaw: 'ペナン島沖',
+        operationPhraseRaw: 'ペナン島沖',
+        battles: [
+          {
+            ...nodeBattle,
+            operationLabelRaw: 'ペナン島沖',
+            operationPhraseRaw: 'ペナン島沖',
+            enemyDeckNameRaw: '敵主力艦隊',
+            enemyShipNamesRaw: ['軽巡ホ級', '駆逐ロ級', '駆逐ロ級'],
+            sawAirAttack: false,
+          },
+        ],
+      },
+      'completed',
+    )
+
+    const standard = buildWarReportFromRecord(mainForceRecord, 'standard_bulletin', {
+      variantSeed: 6,
+    })
+    const short = buildWarReportFromRecord(mainForceRecord, 'short_bulletin', {
+      variantSeed: 6,
+    })
+
+    expect(`${standard.bulletin}\n${standard.body}`).not.toContain('甚大ナル圧力')
+    expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/壊滅的|赫々タル戦果/)
+    expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|圧倒|赫々タル戦果|大打撃/)
   })
 
   it('renders retreat failures differently across the three styles without fabricating ammo counts', () => {

@@ -562,7 +562,7 @@ const buildHistoricalStandardSubheadlineFamilies = (
       id: 'historical-standard-subheadline-main-force',
       variants: [
         '敵主力ニ打撃ヲ加ヘ戦果顕著ナリ',
-        '敵主力部隊ニ甚大ナル圧力ヲ加ヘタリ',
+        '敵主力部隊ニ有効打撃ヲ與ヘタリ',
         '敵主力企図ヲ挫折セシメタリ',
       ],
     },
@@ -744,7 +744,7 @@ const buildPublicDamageClaimFamilies = (
             ]
           : [
               '敵主力ニ打撃ヲ加ヘタリ。',
-              '敵主力部隊ニ圧力ヲ加ヘタリ。',
+              '敵主力部隊ニ有効打撃ヲ加ヘタリ。',
               '敵主力企図ヲ挫折セシメタリ。',
             ],
     },
@@ -1545,42 +1545,29 @@ const buildFormalEnemySummaryFamilies = () =>
 
 const buildFormalEngagementFamilies = () => [
   {
-    id: 'formal-engagement-standard',
-    airVariants: [
-      '航空攻撃ヲ伴フ交戦。砲雷戦細目未詳。',
-      '航空戦ヲ交ヘタル交戦。砲雷戦細目未詳。',
-      '空襲企図ヲ伴フ交戦。砲雷戦細目未詳。',
-    ],
-    surfaceVariants: [
-      '通常交戦。砲雷戦細目未詳。',
-      '水上交戦実施。砲雷戦細目未詳。',
-      '砲雷戦実施。細目未詳。',
-    ],
-  },
-  {
-    id: 'formal-engagement-brief',
-    airVariants: [
-      '航空戦伴随。砲雷戦細目未詳。',
-      '空襲企図認ム。砲雷戦細目未詳。',
-      '航空攻撃下ニ交戦。砲雷戦細目未詳。',
-    ],
-    surfaceVariants: [
-      '通常交戦実施。細目未詳。',
-      '水上戦闘。砲雷戦細目未詳。',
-      '交戦実施。砲雷戦細目未詳。',
-    ],
-  },
-  {
     id: 'formal-engagement-record',
     airVariants: [
-      '航空攻撃ヲ交ヘタル交戦経過ナリ。砲雷戦細目未詳。',
-      '航空戦下ニ交戦。砲雷戦細目未詳。',
-      '航空企図ヲ伴ヒ交戦。砲雷戦細目未詳。',
+      '水上及航空協同ノ下ニ交戦。細目未詳。',
+      '航空兵力ノ関与ヲ得テ交戦。砲雷戦細目未詳。',
+      '航空情況下ニ交戦。砲雷戦細目未詳。',
     ],
     surfaceVariants: [
-      '交戦経過ハ通常戦闘ナリ。砲雷戦細目未詳。',
-      '水上戦闘経過。砲雷戦細目未詳。',
-      '交戦ハ通常推移。砲雷戦細目未詳。',
+      '敵前衛部隊ト接触、交戦継続。細目未詳。',
+      '水上交戦実施。砲雷戦細目未詳。',
+      '通常交戦実施。細目未詳。',
+    ],
+  },
+  {
+    id: 'formal-engagement-summary',
+    airVariants: [
+      '交戦継続。航空関係細目未詳。',
+      '航空関係ヲ伴フ交戦。砲雷戦細目未詳。',
+      '交戦経過概ネ順調、航空関係細目未詳。',
+    ],
+    surfaceVariants: [
+      '交戦経過概ネ順調、砲雷戦細目未詳。',
+      '敵部隊ト接触、交戦継続。細目未詳。',
+      '通常交戦。砲雷戦細目未詳。',
     ],
   },
 ] satisfies FormalEngagementFamily[]
@@ -1736,35 +1723,6 @@ const buildFormalResultSentenceFromRank = (
   ])
 }
 
-const buildFormalOwnDamageSentence = (battle: BattleNodeCapture, index: number, seed: number) => {
-  if (battle.damageSummary.severity !== 'none') {
-    return sanitizeDamageDetail(battle.damageSummary.detail)
-  }
-
-  return pickVariant(
-    seed,
-    `formal_after_action:nodeDamage:none:${parseNodeNumber(battle) ?? index + 1}`,
-    ['被害認メズ。', '我方損害ナシ。', '損傷艦ヲ認メズ。'],
-  )
-}
-
-const buildFormalPostBattleLine = (battle: BattleNodeCapture, index: number, seed: number) => {
-  if (!battle.mvpNameRaw) {
-    return null
-  }
-
-  const normalizedName = normalizeFriendlyReportName(battle.mvpNameRaw)
-  return pickVariant(
-    seed,
-    `formal_after_action:nodePostBattle:${parseNodeNumber(battle) ?? index + 1}`,
-    [
-      `　戦闘後判定　「${normalizedName}」殊勲艦ト認ム。`,
-      `　戦闘後判定　「${normalizedName}」殊勲ト認ム。`,
-      `　戦闘後判定　「${normalizedName}」殊勲艦ト認定。`,
-    ],
-  )
-}
-
 const buildFormalOverallResultSentence = (context: ReportRenderContext) => {
   if (context.kind === 'practice') {
     return '対抗演習ヲ実施、所定課目ヲ了ス。'
@@ -1793,6 +1751,57 @@ const buildFormalOverallResultSentence = (context: ReportRenderContext) => {
   return '敵ト交戦、戦果並被害ノ精査ヲ要ス。'
 }
 
+const buildFormalActionSummary = (context: ReportRenderContext) => {
+  if (context.kind === 'practice') {
+    return '対抗演習ヲ実施、所定課目ヲ了ス。'
+  }
+
+  if (isAnyFailedSortie(context)) {
+    return `${buildEncounterObject(context)}ニ対シ交戦行動ヲ実施。`
+  }
+
+  return `${buildEncounterObject(context)}ニ対シ所定ノ戦闘行動ヲ実施。`
+}
+
+const buildFormalOwnDamageSentence = (
+  battle: BattleNodeCapture,
+  context: ReportRenderContext,
+  index: number,
+  seed: number,
+) => {
+  if (battle.damageSummary.severity !== 'none') {
+    return sanitizeDamageDetail(battle.damageSummary.detail)
+  }
+
+  if (hasNonTrivialDamage(context)) {
+    if (context.nodeCount <= 1) {
+      return sanitizeDamageDetail(context.damageDetail)
+    }
+
+    return pickVariant(
+      seed,
+      `formal_after_action:nodeDamage:uncertain:${parseNodeNumber(battle) ?? index + 1}`,
+      context.damageSeverity === 'light'
+        ? [
+            '軽微損傷艦アリ。交戦点別細目未詳。',
+            '軽微損傷認ム。節別判定未詳。',
+            '損傷艦アリ。交戦点別細目未詳。',
+          ]
+        : [
+            '損傷艦アリ。交戦点別細目未詳。',
+            '被害アリ。節別判定未詳。',
+            '損傷細目後報。',
+          ],
+    )
+  }
+
+  return pickVariant(
+    seed,
+    `formal_after_action:nodeDamage:none:${parseNodeNumber(battle) ?? index + 1}`,
+    ['被害認メズ。', '我方損害ナシ。', '損傷艦ヲ認メズ。'],
+  )
+}
+
 const buildFormalNodeLines = (
   battle: BattleNodeCapture,
   index: number,
@@ -1806,13 +1815,8 @@ const buildFormalNodeLines = (
     `　敵情　${buildFormalEnemySummary(battle, context)}`,
     `　交戦結果　${buildFormalResultSentenceFromRank(battle, index, seed)}`,
     `　交戦概要　${buildFormalEngagementOverview(battle, index, engagementFamily, seed)}`,
-    `　我方被害　${buildFormalOwnDamageSentence(battle, index, seed)}`,
+    `　我方被害　${buildFormalOwnDamageSentence(battle, context, index, seed)}`,
   ]
-
-  const postBattleLine = buildFormalPostBattleLine(battle, index, seed)
-  if (postBattleLine) {
-    lines.push(postBattleLine)
-  }
 
   return lines
 }
@@ -1894,7 +1898,8 @@ const buildFormalSortieBody = (
 
   lines.push('五、戦果。')
   lines.push(`　戦果総括　${buildFormalOverallResultSentence(context)}`)
-  lines.push(`　敵情総括　${buildEncounterObject(context)}ニ対シ所定ノ戦闘行動ヲ実施。`)
+  lines.push(`　敵情総括　${buildEncounterObject(context)}。`)
+  lines.push(`　行動総括　${buildFormalActionSummary(context)}`)
   lines.push(...buildFormalDamageSummaryLines(context, '六'))
   lines.push('七、所見。')
   lines.push(...buildFormalFindings(context, findingsText))
