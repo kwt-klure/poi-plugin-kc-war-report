@@ -276,8 +276,10 @@ live line が現在取得するのは、保守的で安全な fact set です。
 
 The exact text is no longer a single hard-coded template.
 Saved entries keep stable wording, but different entries can choose different phrasing families.
+Current polish work is kept intentionally render-layer-first and corpus-first: stabilize truth capture first, then refine document voices in small or medium register passes.
 
 以下の固有名は README 用の去識別化サンプルです。
+現在の polish は render-layer-first / corpus-first を意図的に維持しています。まず truth capture を安定させ、その後に small / medium な register pass で文書声線を整えます。
 
 ### `標準公報`
 
@@ -291,7 +293,11 @@ Saved entries keep stable wording, but different entries can choose different ph
 敵潜航兵力ニ打撃ヲ与ヘ、大ナル戦果ヲ収メタリ
 
 帝国海軍出撃部隊ハ、同方面ニ於テ敵潜航兵力ノ蠢動ヲ察知シ、直ニ之ヲ邀撃セリ。
-爾後反復攻撃ヲ加ヘ、敵企図ヲ挫折セシメ、海上交通保全ノ目的ヲ概ネ達成セリ。
+敵潜航企図ヲ挫折セシメ、海上交通保全ノ目的ヲ概ネ達成セリ。
+
+当時我部隊兵力ハ、駆逐艦二隻、軽巡洋艦一隻ヲ基幹トシ、旗艦「ジョンストン」ノ下ニ整斉ナル作戦行動ヲ継続セリ。
+
+大本営海軍部ハ本行動ノ成果ヲ公表ス。
 ```
 
 ### `硬派詳報`
@@ -312,27 +318,26 @@ Saved entries keep stable wording, but different entries can choose different ph
 二、参加兵力。
 　駆逐艦二隻、軽巡洋艦一隻。旗艦「ジョンストン」。
 三、敵情。
-　敵情判断　敵潜水兵力。
+　敵情総括　敵潜水兵力。
 　交戦点数　二。
 四、戦闘経過。
 【第一交戦点】
 　交戦時刻　1234
 　敵情　敵深海潜水艦隊前衛。確認艦種 潜水ソ級、潜水カ級。
 　交戦結果　敵ニ打撃ヲ与ヘ、交戦目的ニ照ラシ概ネ良好ナリ。
-　交戦概要　対潜警戒下ニ於ケル交戦。砲雷戦細目未詳。
-　我方被害　被害認メズ。
-　戦闘後判定　「ジョンストン」殊勲艦ト認定。
+　交戦概要　敵前衛部隊ト接触、水上交戦実施。細目未詳。
+　我方被害　損傷艦ヲ認メズ。
 
 【第二交戦点】
 　交戦時刻　1240
 　敵情　敵深海潜水艦隊。確認艦種 潜水ヨ級、潜水カ級。
 　交戦結果　敵ニ有効ナル打撃ヲ加ヘ、所定行動概ネ支障ナシ。
-　交戦概要　航空攻撃ヲ伴フ交戦。砲雷戦細目未詳。
-　我方被害　我方損害ナシ。
-　戦闘後判定　「アトランタ」殊勲ト認ム。
+　交戦概要　砲雷戦経過概略把握ニ止マル。
+　我方被害　損傷艦ヲ認メズ。
 五、戦果。
 　戦果総括　敵ニ有効打撃ヲ与ヘ、所定行動ヲ完遂。
-　敵情総括　敵潜水兵力ニ対シ所定ノ戦闘行動ヲ実施。
+　敵情総括　敵潜水兵力。
+　行動総括　敵潜水兵力ニ対シ所定ノ戦闘行動ヲ実施。
 六、被害。
 　大破艦　ナシ
 　中破艦　ナシ
@@ -340,7 +345,7 @@ Saved entries keep stable wording, but different entries can choose different ph
 　摘要　被害艦ヲ認メズ。
 七、所見。
 　対潜警戒処置概ネ適切ナリ。
-　交戦経過ヲ通ジ部隊行動概ネ支障ナシ。
+　戦闘後判定ニ於テ「ジョンストン」殊勲艦ト認定。
 
 以上
 ```
@@ -356,7 +361,30 @@ Saved entries keep stable wording, but different entries can choose different ph
 
 一、我軍、直ニ之ヲ邀撃セリ。
 二、敵潜航企図ヲ挫折セシメタリ。
-三、戦果顕著ナリ。
+三、右、発表ス。
+```
+
+### `戦闘参考詳報`
+
+```text
+戦闘参考詳報
+令和八年三月十四日
+於 カレー洋リランカ島沖
+
+件名：カレー洋リランカ島沖ニ於ケル敵東洋艦隊再集結状況参考
+
+一、目的。
+　同方面ニ於ケル敵主力再集結傾向及迎撃態勢ノ要点ヲ整理シ、交戦想定資料ト為ス。
+二、我方兵力概況。
+　戦艦二隻、正規空母二隻、航空巡洋艦一隻、軽巡洋艦一隻。旗艦「某」。
+三、敵情総括。
+　敵情総括　敵主力部隊ヲ擁スル敵部隊。
+　敵主力編成ハ戦艦・空母混成ノ場合多ク、前進経路次第ニ被害傾向急変ス。
+四、交戦想定。
+　想定交戦点数　三。
+　主想定口径　敵主力ニ大打撃／敵企図ヲ挫折／制海権ヲ確保。
+五、附記。
+　本資料ハ海域既知情報ヲ基礎トスル参考資料ニシテ、実況詳報ニ非ズ。
 ```
 
 ## Sandbox Direction
@@ -414,7 +442,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.9.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.10.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update

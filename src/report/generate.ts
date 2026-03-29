@@ -545,8 +545,8 @@ const buildHistoricalStandardSubheadlineFamilies = (
     profile.enemyDamageClaim === 'enemy_air_crushed' && {
       id: 'historical-standard-subheadline-air',
       variants: [
-        '敵航空兵力ニ甚大ナル打撃ヲ與ヘタリ',
-        '敵航空攻勢ヲ挫折セシメ大ナル戦果ヲ収ム',
+        '敵航空兵力ニ有効打撃ヲ與ヘタリ',
+        '敵航空攻勢ヲ挫折セシメ所定成果ヲ収メタリ',
         '敵航空企図ヲ覆シ我軍主導ヲ確保セリ',
       ],
     },
@@ -555,21 +555,21 @@ const buildHistoricalStandardSubheadlineFamilies = (
       variants: [
         '敵潜航兵力ニ打撃ヲ加ヘタリ',
         '敵潜航企図ヲ挫折セシメタリ',
-        '敵潜水兵力ニ大ナル戦果ヲ収メタリ',
+        '敵潜水兵力ニ有効打撃ヲ与ヘタリ',
       ],
     },
     profile.enemyDamageClaim === 'enemy_main_force_hit' && {
       id: 'historical-standard-subheadline-main-force',
       variants: [
-        '敵主力ニ打撃ヲ加ヘ戦果顕著ナリ',
         '敵主力部隊ニ有効打撃ヲ與ヘタリ',
         '敵主力企図ヲ挫折セシメタリ',
+        '敵主力ノ行動ヲ牽制シ成果顕著ナリ',
       ],
     },
     profile.officialOutcome === 'claimed_crushing_blow' && {
       id: 'historical-standard-subheadline-crushing',
       variants: [
-        '敵ニ大ナル打撃ヲ與ヘ戦果顕著ナリ',
+        '敵ニ有効打撃ヲ與ヘ戦果顕著ナリ',
         '敵企図ヲ挫折セシメ作戦成果ヲ確保セリ',
         '戦果顕著ニシテ我軍行動概ネ順調ナリ',
       ],
@@ -577,9 +577,9 @@ const buildHistoricalStandardSubheadlineFamilies = (
     {
       id: 'historical-standard-subheadline-general',
       variants: [
-        '敵ニ打撃ヲ加ヘ所定成果ヲ収メタリ',
+        '敵ニ有効打撃ヲ与ヘ所定成果ヲ収メタリ',
         '敵企図ヲ挫折セシメ所定成果ヲ確保セリ',
-        '敵部隊ニ制肘ヲ加ヘタリ',
+        '敵部隊ノ行動ヲ制シタリ',
       ],
     },
   ])
@@ -599,7 +599,7 @@ const buildPublicInitiativeFamilies = (
             ? [
                 '対抗演習ヲ実施セリ。',
                 '演習行動ヲ開始セリ。',
-                '所定訓練課目ヲ敢行セリ。',
+                '所定演習課目ヲ敢行セリ。',
               ]
             : [
                 `帝国海軍演習部隊ハ、${toJapaneseDate(
@@ -625,13 +625,13 @@ const buildPublicInitiativeFamilies = (
           : [
               `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
                 profile,
-              )}ニ対シ直ニ之ヲ邀撃セリ。`,
+              )}ニ対シ邀撃行動ヲ開始セリ。`,
               `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ出現セル${buildPublicEncounterObject(
                 profile,
-              )}ニ対シ急襲ヲ敢行セリ。`,
+              )}ヲ認メ、直ニ之ニ対処セリ。`,
               `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル${buildPublicEncounterObject(
                 profile,
-              )}トノ交戦ニ於テ直ニ猛攻ヲ加ヘタリ。`,
+              )}トノ接触ニ際シ、邀撃部署ニ就ケリ。`,
             ],
     },
     profile.initiativeFrame === 'assault' && {
@@ -644,13 +644,13 @@ const buildPublicInitiativeFamilies = (
               '我軍、敢然作戦ヲ敢行セリ。',
             ]
           : [
-              `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ攻撃ヲ開始セリ。`,
+              `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ攻勢行動ヲ開始セリ。`,
               `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル${buildPublicEncounterObject(
                 profile,
-              )}ニ対シ猛攻ヲ加ヘタリ。`,
+              )}ニ対シ攻撃部署ニ就ケリ。`,
               `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
                 profile,
-              )}ニ対スル作戦ヲ敢然敢行セリ。`,
+              )}ニ対スル作戦行動ヲ敢行セリ。`,
             ],
     },
     {
@@ -663,15 +663,15 @@ const buildPublicInitiativeFamilies = (
               '我軍、果敢ニ攻撃ヲ継続セリ。',
             ]
           : [
-              `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於ケル行動中、${buildPublicEncounterObject(
+              `帝国海軍出撃部隊ハ、${context.operationPhrase}方面行動中、${buildPublicEncounterObject(
                 profile,
               )}ニ対シ攻撃ヲ開始セリ。`,
               `帝国海軍出撃部隊ハ、${context.operationPhrase}方面ニ於テ${buildPublicEncounterObject(
                 profile,
-              )}ニ対シ直ニ之ヲ制圧セリ。`,
+              )}ト接触シ、之ニ応戦セリ。`,
               `帝国海軍出撃部隊ハ、${context.operationPhrase}方面作戦ニ於テ${buildPublicEncounterObject(
                 profile,
-              )}ニ対スル攻撃ヲ果敢ニ継続セリ。`,
+              )}ニ対スル行動ヲ継続セリ。`,
             ],
     },
   ])
@@ -713,9 +713,9 @@ const buildPublicDamageClaimFamilies = (
               '敵航空企図ヲ覆シ大ナル戦果ヲ収メタリ。',
             ]
           : [
-              '敵航空兵力ニ打撃ヲ與ヘタリ。',
+              '敵航空兵力ニ有効打撃ヲ與ヘタリ。',
               '敵航空攻勢ヲ挫折セシメタリ。',
-              '敵航空企図ニ対シ成果ヲ収メタリ。',
+              '敵航空企図ノ遂行ヲ阻止セリ。',
             ],
     },
     profile.enemyDamageClaim === 'enemy_submarine_hit' && {
@@ -730,7 +730,7 @@ const buildPublicDamageClaimFamilies = (
           : [
               '敵潜航兵力ニ打撃ヲ加ヘタリ。',
               '敵潜航企図ヲ挫折セシメタリ。',
-              '敵潜水兵力ニ成果ヲ収メタリ。',
+              '敵潜水兵力ノ行動ヲ制セリ。',
             ],
     },
     profile.enemyDamageClaim === 'enemy_main_force_hit' && {
@@ -743,9 +743,9 @@ const buildPublicDamageClaimFamilies = (
               '敵主力企図ヲ粉砕セシメタリ。',
             ]
           : [
-              '敵主力ニ打撃ヲ加ヘタリ。',
               '敵主力部隊ニ有効打撃ヲ加ヘタリ。',
               '敵主力企図ヲ挫折セシメタリ。',
+              '敵主力ニ打撃ヲ加ヘ、成果顕著ナリ。',
             ],
     },
     profile.enemyDamageClaim === 'major_blow' && {
@@ -759,8 +759,8 @@ const buildPublicDamageClaimFamilies = (
             ]
           : [
               '大ナル打撃ヲ與ヘタリ。',
-              '敵ニ有効ナル打撃ヲ加ヘタリ。',
-              '戦果顕著ナリ。',
+              '敵ニ有効打撃ヲ加ヘタリ。',
+              '成果顕著ナリ。',
             ],
     },
     {
@@ -774,8 +774,8 @@ const buildPublicDamageClaimFamilies = (
             ]
           : [
               '敵企図ヲ挫折セシメタリ。',
-              '敵部隊ニ打撃ヲ加ヘタリ。',
-              '成果顕著ナリ。',
+              '敵部隊ニ打撃ヲ与ヘタリ。',
+              '所定成果ヲ収メタリ。',
             ],
     },
   ])
@@ -1429,7 +1429,7 @@ const buildShortClosingFamilies = (
     profile.officialOutcome === 'claimed_crushing_blow' && {
       id: 'short-closing-crushing',
       variants: [
-        `${leaderPrefix}大本営ハ本戦果ヲ録シ、右発表ス。`,
+        `${leaderPrefix}本戦果ヲ録ス。`,
         `${leaderPrefix}偉功ニ対シ慶祝ノ意ヲ表ス。`,
         `${leaderPrefix}右、発表ス。`,
       ],
@@ -1437,7 +1437,7 @@ const buildShortClosingFamilies = (
     {
       id: 'short-closing-general',
       variants: [
-        `${leaderPrefix}本成果ハ平素ノ錬成ノ賜ナリ。`,
+        `${leaderPrefix}本成果ヲ録ス。`,
         `${leaderPrefix}右、発表ス。`,
         `${leaderPrefix}一層ノ健闘ヲ祈ル。`,
       ],
@@ -1534,40 +1534,49 @@ const buildFormalMissionOverviewFamilies = (context: ReportRenderContext) => {
 const buildFormalEnemySummaryFamilies = () =>
   uniqueFamilies<TextFamily>([
     {
-      id: 'formal-enemy-summary-standard',
-      variants: ['総括判断', '敵情概括', '敵情総括'],
-    },
-    {
-      id: 'formal-enemy-summary-brief',
-      variants: ['敵情判断', '敵情整理', '敵情所見'],
+      id: 'formal-enemy-summary-canonical',
+      variants: ['敵情総括'],
     },
   ])
 
 const buildFormalEngagementFamilies = () => [
   {
-    id: 'formal-engagement-record',
+    id: 'formal-engagement-contact',
     airVariants: [
       '水上及航空協同ノ下ニ交戦。細目未詳。',
-      '航空兵力ノ関与ヲ得テ交戦。砲雷戦細目未詳。',
-      '航空情況下ニ交戦。砲雷戦細目未詳。',
+      '航空情況下ニ接敵、交戦継続。細目未詳。',
+      '敵部隊ト接触、航空関係ヲ伴ヒ交戦。細目未詳。',
     ],
     surfaceVariants: [
-      '敵前衛部隊ト接触、交戦継続。細目未詳。',
-      '水上交戦実施。砲雷戦細目未詳。',
-      '通常交戦実施。細目未詳。',
+      '敵前衛部隊ト接触、水上交戦実施。細目未詳。',
+      '敵部隊ト接触、交戦継続。砲雷戦細目未詳。',
+      '通常水上交戦。細目未詳。',
     ],
   },
   {
-    id: 'formal-engagement-summary',
+    id: 'formal-engagement-brief',
     airVariants: [
-      '交戦継続。航空関係細目未詳。',
+      '航空関係細目未詳。砲雷戦経過概略把握ニ止マル。',
       '航空関係ヲ伴フ交戦。砲雷戦細目未詳。',
-      '交戦経過概ネ順調、航空関係細目未詳。',
+      '航空情況下ノ交戦経過、概略把握ニ止マル。',
     ],
     surfaceVariants: [
-      '交戦経過概ネ順調、砲雷戦細目未詳。',
-      '敵部隊ト接触、交戦継続。細目未詳。',
-      '通常交戦。砲雷戦細目未詳。',
+      '砲雷戦経過概略把握ニ止マル。',
+      '交戦継続。砲雷戦細目未詳。',
+      '水上交戦経過、概略把握ニ止マル。',
+    ],
+  },
+  {
+    id: 'formal-engagement-orderly',
+    airVariants: [
+      '航空関係ヲ伴フ交戦実施。処置概ネ整然、細目未詳。',
+      '航空情況下ニ於ケル交戦。経過概略整然タリ。',
+      '航空関与ノ下ニ交戦。記録概略ニ止マル。',
+    ],
+    surfaceVariants: [
+      '水上交戦実施。処置概ネ整然、細目未詳。',
+      '敵部隊ト接触後、交戦経過概略整然タリ。',
+      '通常交戦実施。記録概略ニ止マル。',
     ],
   },
 ] satisfies FormalEngagementFamily[]
@@ -1786,11 +1795,13 @@ const buildFormalOwnDamageSentence = (
             '軽微損傷艦アリ。交戦点別細目未詳。',
             '軽微損傷認ム。節別判定未詳。',
             '損傷艦アリ。交戦点別細目未詳。',
+            '軽度損傷アリ。細目後報。',
           ]
         : [
             '損傷艦アリ。交戦点別細目未詳。',
             '被害アリ。節別判定未詳。',
             '損傷細目後報。',
+            '被害細目後報。',
           ],
     )
   }
@@ -2089,7 +2100,7 @@ const buildShortBulletin = (
     fingerprint,
     'short_bulletin',
     'closing',
-    buildPublicHeatedClosingFamilies(context, 'short_bulletin', propagandaProfile, fingerprint),
+    buildShortClosingFamilies(context, propagandaProfile, fingerprint),
     recentSelections,
     slotFamilies,
   )

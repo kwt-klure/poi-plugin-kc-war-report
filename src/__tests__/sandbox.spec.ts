@@ -18,6 +18,7 @@ describe('sandbox document generator', () => {
     expect(report.bulletin).toContain('南西諸島近海')
     expect(report.body).toContain('帝国海軍出撃部隊ハ')
     expect(report.body).not.toContain('撃墜')
+    expect(report.body).not.toContain('本戦果ヲ録ス。')
   })
 
   it('renders pseudo short bulletins as numbered dispatches', () => {
@@ -33,6 +34,7 @@ describe('sandbox document generator', () => {
     expect(report.bulletin).toContain('大本営海軍部発表')
     expect(report.body).toContain('一、')
     expect(report.body).toContain('二、')
+    expect(report.body).not.toContain('帝国海軍出撃部隊ハ')
     expect(buildPlainTextReport(report)).toMatch(/粉砕|圧倒|赫々|壊滅的|殲滅的/)
   })
 
@@ -47,7 +49,8 @@ describe('sandbox document generator', () => {
 
     expect(report.bulletin).toContain('戦闘参考詳報')
     expect(report.body).toContain('実況詳報ニ非ズ')
-    expect(report.body).toContain('敵情判断')
+    expect(report.body).toContain('敵情総括')
+    expect(report.body).toContain('交戦想定')
   })
 
   it('renders planning memos as preparatory documents instead of war reports', () => {
@@ -60,7 +63,8 @@ describe('sandbox document generator', () => {
     })
 
     expect(report.bulletin).toContain('作戦準備覚書')
-    expect(report.body).toContain('広報想定')
+    expect(report.body).toContain('広報口径')
     expect(report.body).toContain('実況戦闘記録ニ非ズ')
+    expect(report.body).not.toContain('大本営海軍部発表')
   })
 })

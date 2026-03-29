@@ -445,6 +445,7 @@ describe('war report sortie architecture', () => {
     expect(new Set(resultLines).size).toBeGreaterThan(1)
     expect(new Set(overviewLines).size).toBeGreaterThan(1)
     expect(new Set(damageLines).size).toBeGreaterThan(1)
+    expect(overviewLines.some((line) => line.includes('交戦経過概ネ順調'))).toBe(false)
     expect(formal.body).toContain('戦闘後判定ニ於テ「フレッチャー」殊勲艦ト認定。')
   })
 
@@ -479,7 +480,9 @@ describe('war report sortie architecture', () => {
     expect(formal.body).not.toContain('　我方被害　被害認メズ。')
     expect(formal.body).not.toContain('　我方被害　我方損害ナシ。')
     expect(formal.body).not.toContain('　我方被害　損傷艦ヲ認メズ。')
-    expect(formal.body).toMatch(/交戦点別細目未詳|節別判定未詳|損傷細目後報/)
+    expect(formal.body).toMatch(
+      /交戦点別細目未詳|節別判定未詳|損傷細目後報|ジョンストン\(小破\)、ヴェールヌイ\(小破\)/,
+    )
   })
 
   it('uses 行動総括 for our side summary while keeping 敵情総括 enemy-only in formal reports', () => {
@@ -497,6 +500,9 @@ describe('war report sortie architecture', () => {
 
     expect(formal.body).toContain('敵情総括　敵航空兵力ヲ擁スル敵部隊。')
     expect(formal.body).toContain('行動総括　敵航空兵力ヲ擁スル敵部隊ニ対シ所定ノ戦闘行動ヲ実施。')
+    expect(formal.body).not.toContain('敵情判断')
+    expect(formal.body).not.toContain('敵情整理')
+    expect(formal.body).not.toContain('敵情所見')
   })
 
   it('keeps standard bulletin wording calmer than short bulletin rhetoric for main-force claims', () => {
@@ -532,6 +538,73 @@ describe('war report sortie architecture', () => {
     expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|圧倒|赫々タル戦果|大打撃/)
   })
 
+  it('keeps standard bulletin lead and result paragraphs semantically distinct', () => {
+    const mainForceRecord = normalizeSortieSession(
+      {
+        ...sortieSession,
+        id: 'sortie-main-force-progression',
+        operationLabelRaw: 'ペナン島沖',
+        operationPhraseRaw: 'ペナン島沖',
+        battles: [
+          {
+            ...nodeBattle,
+            operationLabelRaw: 'ペナン島沖',
+            operationPhraseRaw: 'ペナン島沖',
+            enemyDeckNameRaw: '敵主力艦隊',
+            enemyShipNamesRaw: ['軽巡ホ級', '駆逐ロ級', '駆逐ロ級'],
+            sawAirAttack: false,
+          },
+        ],
+      },
+      'completed',
+    )
+
+    const standard = buildWarReportFromRecord(mainForceRecord, 'standard_bulletin', {
+      variantSeed: 2,
+    })
+    const paragraphs = standard.body.split('\n\n')
+
+    expect(paragraphs).toHaveLength(4)
+    expect(paragraphs[0]).toMatch(/開始セリ|応戦セリ|之ニ対処セリ|部署ニ就ケリ|行動ヲ継続セリ/)
+    expect(paragraphs[1]).toMatch(/打撃|挫折|戦果|成果/)
+    expect(paragraphs[0]).not.toContain('直ニ之ヲ制圧セリ')
+    expect(paragraphs[1]).not.toContain('部署ニ就ケリ')
+  })
+
+  it('keeps short bulletin closings distinct from standard bulletin public closings', () => {
+    const mainForceRecord = normalizeSortieSession(
+      {
+        ...sortieSession,
+        id: 'sortie-short-collision',
+        operationLabelRaw: 'ペナン島沖',
+        operationPhraseRaw: 'ペナン島沖',
+        battles: [
+          {
+            ...nodeBattle,
+            operationLabelRaw: 'ペナン島沖',
+            operationPhraseRaw: 'ペナン島沖',
+            enemyDeckNameRaw: '敵主力艦隊',
+            enemyShipNamesRaw: ['軽巡ホ級', '駆逐ロ級', '駆逐ロ級'],
+            sawAirAttack: false,
+          },
+        ],
+      },
+      'completed',
+    )
+
+    const standard = buildWarReportFromRecord(mainForceRecord, 'standard_bulletin', {
+      variantSeed: 4,
+    })
+    const short = buildWarReportFromRecord(mainForceRecord, 'short_bulletin', {
+      variantSeed: 4,
+    })
+
+    expect(short.body).toMatch(/本戦果ヲ録ス|本成果ヲ録ス|右、発表ス|一層ノ健闘ヲ祈ル|偉功ニ対シ慶祝ノ意ヲ表ス/)
+    expect(short.body).not.toContain('大本営海軍部ハ本行動ノ成果ヲ公表ス。')
+    expect(standard.body).not.toContain('本戦果ヲ録ス。')
+    expect(standard.body).not.toContain('本成果ヲ録ス。')
+  })
+
   it('renders retreat failures differently across the three styles without fabricating ammo counts', () => {
     const failedSortie = {
       ...sortieSession,
@@ -557,7 +630,7 @@ describe('war report sortie architecture', () => {
     expect(standard.body).toMatch(/成果|戦果|敵企図/)
     expect(standard.body).not.toMatch(/転進|反転|離脱/)
     expect(formal.body).toContain('大破艦　一隻')
-    expect(formal.body).toContain('砲雷戦細目未詳')
+    expect(formal.body).toMatch(/細目未詳|概略把握/)
     expect(formal.body).toContain('戦果総括')
     expect(short.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
     expect(short.body).toContain('一、')

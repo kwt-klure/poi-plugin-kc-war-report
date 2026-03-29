@@ -1,5 +1,68 @@
 # Patch Notes
 
+## 0.4.10
+
+This release is a render-layer corpus polish pass.
+
+It keeps the truth-capture core stable:
+
+- no runtime changes
+- no model changes
+- no preferences changes
+- no deck binding changes
+- no admiral identity / rank detection changes
+- no deterministic schema changes
+
+Instead, it tightens document register separation across both live reports and sandbox documents.
+
+この release は render-layer の corpus polish pass です。
+
+truth-capture の core には触れていません。
+
+- runtime 変更なし
+- model 変更なし
+- preferences 変更なし
+- deck binding 変更なし
+- 提督 identity / rank 検出変更なし
+- deterministic schema 変更なし
+
+今回触れたのは live report と sandbox document の文種分離と register 調整です。
+
+### Changed
+
+- `硬派詳報`
+  - cleaner `交戦概要` inventories with less same-beat repetition inside one report
+  - more stable conservative node-level damage phrasing
+  - fixed long-term formal label usage around `敵情総括 / 行動総括`
+  - keeps `殊勲` concentrated in the final summary instead of node-by-node narration
+- `標準公報`
+  - clearer semantic progression between initiative, result claim, and closing
+  - calmer official register with less same-meaning restatement
+  - retains an orderly public-announcement voice distinct from `短報`
+- `短報`
+  - keeps the three-bullet dispatch identity
+  - uses more bulletin-like record/closing lines
+  - avoids directly reusing standard-bulletin core wording
+- `sandbox`
+  - `参考詳報` and `作戦準備覚書` now read more like staff/reference documents and less like reshaped live battle reports
+- `README`
+  - updated anonymized examples to better reflect the current render-layer register split
+
+### Validation
+
+Checked with:
+
+```bash
+git diff --check
+```
+
+Also validated by:
+
+- targeted report/sandbox wording assertions in the existing test suite
+- render-layer smoke inspection after the corpus polish changes
+
+`jest` / `tsc` CLI still showed local environment hang behavior in this workspace, so CLI completion was not used as the sole success signal for this release.
+
 ## 0.4.9
 
 This release is a small voice-tuning patch.
