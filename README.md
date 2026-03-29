@@ -387,6 +387,32 @@ Current polish work is kept intentionally render-layer-first and corpus-first: s
 　本資料ハ海域既知情報ヲ基礎トスル参考資料ニシテ、実況詳報ニ非ズ。
 ```
 
+## Why The Contrast Is Funny
+
+The plugin works best when the player can see the truth and the bulletin still refuses to admit it.
+
+- the GUI states the human-readable reality
+- `硬派詳報` records the same sortie as a truth-first internal document
+- `標準公報` and especially `短報` then reframe that same sortie into a shameless public announcement
+
+That gap is the joke.
+
+この plugin は、提督本人が真相を見ているのに、公報だけが平然と別の顔をする時に一番おもしろくなります。
+
+- GUI は人間に読める形で現実を示す
+- `硬派詳報` は同じ sortie を truth-first の内部文書として残す
+- `標準公報` と、とりわけ `短報` は、その同じ sortie を面の皮の厚い対外発表に変換する
+
+この落差そのものが笑いどころです。
+
+![README live contrast example](/Users/yen-hsuantseng/Documents/Poi%20War%20Report/assets/readme-live-contrast-2026-03-29.png)
+
+The point is not that the GUI is wrong.
+The point is that the GUI makes the situation obvious, and the short bulletin still dares to print a headline like `赫々タル戦果ヲ収ム`.
+
+重要なのは GUI が間違っていることではありません。
+GUI が状況をはっきり見せているのに、それでも短報が `赫々タル戦果ヲ収ム` と平然と書いてしまう、そのずれがこの玩具の核心です。
+
 ## Sandbox Direction
 
 The sandbox does not pretend to be a real battle recorder.
