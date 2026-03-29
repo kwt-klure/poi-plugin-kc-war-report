@@ -405,7 +405,7 @@ That gap is the joke.
 
 この落差そのものが笑いどころです。
 
-![README live contrast example](/Users/yen-hsuantseng/Documents/Poi%20War%20Report/assets/readme-live-contrast-2026-03-29.png)
+![README live contrast example](assets/readme-live-contrast-2026-03-29.png)
 
 The point is not that the GUI is wrong.
 The point is that the GUI makes the situation obvious, and the short bulletin still dares to print a headline like `赫々タル戦果ヲ収ム`.
