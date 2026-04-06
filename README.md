@@ -40,7 +40,8 @@ That means:
 - prefer IJN-flavored wording in user-facing text
 - avoid leaking raw `S / A / B` UI wording into `硬派詳報`
 - write `未詳` / `細目未詳` instead of inventing missing detail
-- allow `標準公報` and `短報` to exaggerate, but do not invent precise numbers the repo does not know
+- allow `標準公報` and `短報` to exaggerate aggressively
+- if the truth layer has a concrete wartime-style event basis, `標準公報` and `短報` may also print concrete inflated counts
 
 この plugin は **for fun** だからこそ、user-facing text は「艦これ UI の言い換え」よりも「IJN 文書がそれらしく書きそうな字面」に寄せることを優先します。
 
@@ -50,7 +51,8 @@ That means:
 - ただし user-facing text は IJN 風の言い回しを優先する
 - `硬派詳報` に raw な `S / A / B` UI 文言を漏らさない
 - 書けない detail は捏造せず `未詳` / `細目未詳` と書く
-- `標準公報` と `短報` は誇張してよいが、repo が知らない精密な数字は作らない
+- `標準公報` と `短報` は強く誇張してよい
+- truth layer に wartime-style な event basis がある場合、`標準公報` と `短報` は具体的な浮報数も出してよい
 
 ## Truth Policy Split
 
@@ -67,6 +69,7 @@ The plugin has two different truth policies.
 - public propaganda layer
 - written as if headquarters is announcing results to the public
 - allowed to exaggerate, soften losses, and distort tone
+- may use concrete inflated counts when a real event basis exists under the hood
 
 この plugin には二つの truth policy があります。
 
@@ -81,6 +84,29 @@ The plugin has two different truth policies.
 - public propaganda layer
 - 大本営が対外発表する公告文
 - 誇張、損害の矮小化、 tone の歪曲を許容
+- 下層に実 event がある場合、具体的な浮報数を載せてもよい
+
+## Invisible Work Still Counts
+
+Some of the most valuable work in KanColle does not look dramatic in a simple damage ledger.
+
+This plugin now tries to give at least a small place back to that kind of work:
+
+- `硬派詳報` can record defensive anti-air credit in a dry, internal-report register
+- `標準公報` and `短報` can then turn the same event into shameless headquarters-style enemy-aircraft claims
+
+The point is not to become a battle simulator.
+The point is to let the documents remember that ships doing invisible work still mattered.
+
+艦これでは、damage ledger だけを見ると目立たないが、実際には大きい働きというものがあります。
+
+この plugin は、その種の功績にも最小限の文書上の居場所を与えるようになりました。
+
+- `硬派詳報` は、防空戦果のような働きを乾いた内部文書調で記録できる
+- `標準公報` と `短報` は、同じ event を大本営風の敵機撃滅 claim へ書き換えられる
+
+狙いは battle simulator 化ではありません。
+見えにくい働きも、文書の側ではきちんと記憶させることです。
 
 ## Why Three Document Voices Exist
 
@@ -364,6 +390,45 @@ Current polish work is kept intentionally render-layer-first and corpus-first: s
 三、右、発表ス。
 ```
 
+### `防空戦果` を含む出力イメージ
+
+```text
+戦闘詳報
+令和八年四月六日
+於 某海域
+
+四、戦闘経過。
+【第三交戦点】
+　交戦時刻　1026
+　敵情　敵航空兵力を伴う敵部隊。
+　交戦結果　敵ニ有効打撃ヲ与ヘ、所定行動ヲ完遂。
+　交戦概要　敵部隊ト接触、航空情況下ニ交戦。細目未詳。
+　我方被害　損傷細目後報。
+　防空戦果　「初月」防空射撃ニ当リ、敵機計五十三機ヲ撃墜。
+```
+
+```text
+大本営海軍部発表
+
+令和八年四月六日
+
+某方面交戦、敵航空攻勢ヲ挫折
+
+殊ニ「初月」ノ防空戦闘鋭甚ニシテ、敵機百四十余ヲ撃滅セリ。
+```
+
+```text
+大本営海軍部発表
+
+令和八年四月六日
+
+某方面、敵航空攻勢ヲ粉砕
+
+一、我軍、攻撃ヲ開始セリ。
+二、「初月」奮戦、敵機百九十余ヲ掃蕩。
+三、右、発表ス。
+```
+
 ### `戦闘参考詳報`
 
 ```text
@@ -468,7 +533,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.10.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.11.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update

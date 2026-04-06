@@ -1,5 +1,62 @@
 # Patch Notes
 
+## 0.4.11
+
+This release adds a small anti-air truth-event layer and routes it back into all three live report voices.
+
+It is intentionally narrow:
+
+- no deck binding changes
+- no admiral identity / rank detection changes
+- no preferences changes
+- no model-layer rewrite
+- no sandbox feature expansion
+
+Instead, it teaches the reports how to remember defensive anti-air work and how to let the public layer lie about it like a proper headquarters bulletin.
+
+この release は、小さな防空戦闘 truth-event を追加し、それを live 三文書へ戻す patch です。
+
+範囲は意図的に狭く保っています。
+
+- deck binding 変更なし
+- 提督 identity / rank 検出変更なし
+- preferences 変更なし
+- model 層の大改修なし
+- sandbox 機能拡張なし
+
+今回やったのは、防空の功績を三文書が思い出せるようにし、その上で public layer には大本営らしく数を吹かせることです。
+
+### Changed
+
+- `truth capture`
+  - battle node に最小 `AntiAirSummary` を追加
+  - `api_air_fire` と航空 phase の敵機損失から、防空功績の truth event を拾う
+- `硬派詳報`
+  - node ごとに `防空戦果` を出せるようになった
+  - 敵機撃墜数は truth-first の数値または保守表現を使う
+  - `対空CI` などの玩家機制語は出さない
+- `標準公報`
+  - 防空戦闘を根拠に、具体的な敵機撃滅数を大本営口調で浮報できるようになった
+- `短報`
+  - 防空戦果を headline 級 bullet に持ち上げられるようになった
+  - `標準公報` より強い数値で吹く
+- `README`
+  - public layer が具体的な浮報数を使える方針へ同期
+  - 防空戦果の出力イメージを追加
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand src/__tests__/runtime.spec.ts src/__tests__/report.spec.ts
+npm run typeCheck
+npm test -- --runInBand
+git diff --check
+```
+
+All checks passed in this workspace.
+
 ## 0.4.10
 
 This release is a render-layer corpus polish pass.

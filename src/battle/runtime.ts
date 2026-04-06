@@ -18,6 +18,7 @@ import { buildRenderedReportsForHistoryEntry } from '../report/render'
 import type { PoiFleet, PoiShip, PoiShipMaster, PoiShipTypeMaster } from '../poi/types'
 import type {
   AdmiralIdentity,
+  AntiAirSummary,
   BattleCapture,
   BattleMode,
   BattleNodeCapture,
@@ -63,6 +64,7 @@ type CurrentBattleContext = {
   practiceOpponent: string | null
   enemyShipIds: number[]
   sawAirAttack: boolean
+  antiAirSummary: AntiAirSummary | null
 }
 
 type PendingFinalize = {
@@ -272,6 +274,157 @@ const detectAirAttackFromPacket = (packet: BattlePacket) =>
   hasMeaningfulPhaseData(packet.api_air_base_attack) ||
   hasMeaningfulPhaseData(packet.api_friendly_kouku)
 
+const toNullableIndex = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const resolved = toNullableIndex(entry)
+      if (resolved != null) {
+        return resolved
+      }
+    }
+  }
+
+  return null
+}
+
+const toNullableKind = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isInteger(value)) {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const resolved = toNullableKind(entry)
+      if (resolved != null) {
+        return resolved
+      }
+    }
+  }
+
+  return null
+}
+
+const sumNumericLeaves = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value.reduce((sum, entry) => sum + sumNumericLeaves(entry), 0)
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).reduce<number>(
+      (sum, entry) => sum + sumNumericLeaves(entry),
+      0,
+    )
+  }
+
+  return 0
+}
+
+const extractAirFire = (value: unknown): { idx: number | null; kind: number | null } | null => {
+  if (!value) {
+    return null
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const resolved = extractAirFire(entry)
+      if (resolved) {
+        return resolved
+      }
+    }
+    return null
+  }
+
+  if (typeof value === 'object') {
+    const candidate = value as Record<string, unknown>
+    const idx = toNullableIndex(candidate.api_idx)
+    const kind = toNullableKind(candidate.api_kind)
+    if (idx != null || kind != null) {
+      return { idx, kind }
+    }
+  }
+
+  return null
+}
+
+const getBattleAirPhases = (packet: BattlePacket) => [
+  packet.api_kouku,
+  packet.api_injection_kouku,
+  ...(packet.api_air_base_attack ?? []),
+  packet.api_friendly_kouku,
+].filter((phase) => phase != null)
+
+const extractAntiAirSummaryFromPacket = (
+  packet: BattlePacket,
+  fleetShips: FleetShipSnapshot[],
+): AntiAirSummary | null => {
+  let airFireEvent: { idx: number | null; kind: number | null } | null = null
+  let enemyPlaneLoss = 0
+
+  for (const phase of getBattleAirPhases(packet)) {
+    if (!phase || typeof phase !== 'object') {
+      continue
+    }
+
+    const stage2 = (phase as Record<string, unknown>).api_stage2
+    if (!stage2 || typeof stage2 !== 'object') {
+      continue
+    }
+
+    const stage2Object = stage2 as Record<string, unknown>
+    airFireEvent ??= extractAirFire(stage2Object.api_air_fire)
+    enemyPlaneLoss += sumNumericLeaves(stage2Object.api_e_lostcount)
+  }
+
+  if (!airFireEvent) {
+    return null
+  }
+
+  const triggeringShip =
+    airFireEvent.idx != null && airFireEvent.idx < fleetShips.length
+      ? fleetShips[airFireEvent.idx] ?? null
+      : null
+
+  return {
+    triggered: true,
+    shipNameRaw: triggeringShip?.nameJa ?? null,
+    ciKind: airFireEvent.kind,
+    enemyPlaneLoss: enemyPlaneLoss > 0 ? enemyPlaneLoss : null,
+  }
+}
+
+const mergeAntiAirSummary = (
+  current: AntiAirSummary | null,
+  next: AntiAirSummary | null,
+): AntiAirSummary | null => {
+  if (!current) {
+    return next
+  }
+
+  if (!next) {
+    return current
+  }
+
+  const mergedLoss =
+    current.enemyPlaneLoss == null && next.enemyPlaneLoss == null
+      ? null
+      : (current.enemyPlaneLoss ?? 0) + (next.enemyPlaneLoss ?? 0)
+
+  return {
+    triggered: current.triggered || next.triggered,
+    shipNameRaw: current.shipNameRaw ?? next.shipNameRaw,
+    ciKind: current.ciKind ?? next.ciKind,
+    enemyPlaneLoss: mergedLoss != null && mergedLoss > 0 ? mergedLoss : null,
+  }
+}
+
 const getEnemyShipNames = (enemyShipIds: number[]) => {
   const masters = getStoreValue<Record<string, PoiShipMaster> | PoiShipMaster[]>(['const', '$ships'])
   return enemyShipIds
@@ -358,6 +511,7 @@ const buildBattleNodeCapture = (
     damageSummary: buildDamageAssessment(friendlyFleet),
     sawAirAttack: context.sawAirAttack,
     antiAirScreen,
+    antiAirSummary: context.antiAirSummary ? { ...context.antiAirSummary } : null,
     flagshipNameRaw: friendlyFleet[0]?.nameJa ?? null,
     mvpNameRaw: mvpShip?.nameJa ?? null,
   }
@@ -589,6 +743,7 @@ const beginSortieBattleContext = (detail: GameResponseDetail) => {
     practiceOpponent: null,
     enemyShipIds: [],
     sawAirAttack: false,
+    antiAirSummary: null,
   }
 }
 
@@ -608,6 +763,7 @@ const beginPracticeBattleContext = (detail: GameResponseDetail) => {
     practiceOpponent,
     enemyShipIds: [],
     sawAirAttack: false,
+    antiAirSummary: null,
   }
 }
 
@@ -623,6 +779,11 @@ const updateCurrentBattleFromPacket = (packet: BattlePacket) => {
   if (detectAirAttackFromPacket(packet)) {
     currentBattle.sawAirAttack = true
   }
+
+  currentBattle.antiAirSummary = mergeAntiAirSummary(
+    currentBattle.antiAirSummary,
+    extractAntiAirSummaryFromPacket(packet, currentBattle.fleetShips),
+  )
 }
 
 const handleGameResponse = (event: Event) => {
@@ -711,3 +872,8 @@ export const __resolveDeckIdForTests = (
 
 export const __detectAirAttackFromPacketForTests = (packet: BattlePacket) =>
   detectAirAttackFromPacket(packet)
+
+export const __extractAntiAirSummaryFromPacketForTests = (
+  packet: BattlePacket,
+  fleetShips: FleetShipSnapshot[],
+) => extractAntiAirSummaryFromPacket(packet, fleetShips)

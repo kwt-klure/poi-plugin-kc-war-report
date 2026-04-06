@@ -79,6 +79,40 @@ const toJapaneseTime = (timestamp: number) => {
   return `${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+const kansujiDigits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'] as const
+
+const toFormalKansuji = (value: number): string => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '零'
+  }
+
+  const units: Array<[number, string]> = [
+    [1000, '千'],
+    [100, '百'],
+    [10, '十'],
+  ]
+  let remaining = Math.floor(value)
+  let result = ''
+
+  for (const [unitValue, unitLabel] of units) {
+    const quotient = Math.floor(remaining / unitValue)
+    if (quotient <= 0) {
+      continue
+    }
+
+    result += quotient === 1 ? unitLabel : `${kansujiDigits[quotient]}${unitLabel}`
+    remaining %= unitValue
+  }
+
+  if (remaining > 0) {
+    result += kansujiDigits[remaining] ?? String(remaining)
+  }
+
+  return result || '零'
+}
+
+const roundUp10 = (value: number) => Math.ceil(value / 10) * 10
+
 const isFailedRetreat = (context: ReportRenderContext) =>
   context.failureMode === 'failed_with_retreat'
 
@@ -201,6 +235,102 @@ const formatCountLabel = (count: number) => {
 
 const sanitizeDamageDetail = (detail: string) =>
   detail.replace(/^損傷艦:\s*/, '').trim() || '細目未詳'
+
+const formatExactPlaneCount = (value: number) => `${toFormalKansuji(value)}機`
+
+const formatApproximatePlaneCount = (value: number) => `${toFormalKansuji(value)}余機`
+
+const buildSortieAntiAirAggregate = (truthSource: WarReportTruthSource | null) => {
+  if (truthSource?.kind !== 'sortie') {
+    return null
+  }
+
+  const summaries = truthSource.sortie.battles
+    .map((battle) => battle.antiAirSummary)
+    .filter((summary): summary is NonNullable<typeof summary> => summary?.triggered === true)
+
+  if (summaries.length === 0) {
+    return null
+  }
+
+  const truthLoss = summaries.some((summary) => summary.enemyPlaneLoss != null)
+    ? summaries.reduce((sum, summary) => sum + (summary.enemyPlaneLoss ?? 0), 0)
+    : null
+
+  const primarySummary = [...summaries].sort(
+    (left, right) => (right.enemyPlaneLoss ?? -1) - (left.enemyPlaneLoss ?? -1),
+  )[0]
+
+  return {
+    triggered: true,
+    shipName:
+      primarySummary?.shipNameRaw != null
+        ? normalizeFriendlyReportName(primarySummary.shipNameRaw)
+        : null,
+    truthLoss: truthLoss != null && truthLoss > 0 ? truthLoss : null,
+  }
+}
+
+const buildFormalAntiAirSentence = (
+  battle: BattleNodeCapture,
+) => {
+  const summary = battle.antiAirSummary
+  if (!summary?.triggered) {
+    return null
+  }
+
+  const shipName = summary.shipNameRaw ? normalizeFriendlyReportName(summary.shipNameRaw) : null
+
+  if (shipName && summary.enemyPlaneLoss != null && summary.enemyPlaneLoss > 0) {
+    return `　防空戦果　「${shipName}」防空射撃ニ当リ、敵機計${formatExactPlaneCount(summary.enemyPlaneLoss)}ヲ撃墜。`
+  }
+
+  if (shipName) {
+    return `　防空戦果　「${shipName}」防空戦闘ニ当リ、敵航空攻勢ヲ牽制。`
+  }
+
+  return '　防空戦果　防空戦闘ニ依リ敵航空兵力ニ損耗ヲ生ゼシム。'
+}
+
+const buildStandardAntiAirSentence = (truthSource: WarReportTruthSource | null) => {
+  const aggregate = buildSortieAntiAirAggregate(truthSource)
+  if (!aggregate?.triggered) {
+    return ''
+  }
+
+  const shipClause = aggregate.shipName ? `殊ニ「${aggregate.shipName}」ノ防空戦闘鋭甚ニシテ、` : ''
+  if (aggregate.truthLoss != null && aggregate.truthLoss >= 20) {
+    const reportedLoss = roundUp10(
+      Math.max(aggregate.truthLoss * 2.5, aggregate.truthLoss + 60),
+    )
+    return `${shipClause}敵機${formatApproximatePlaneCount(reportedLoss)}ヲ撃滅セリ。`
+  }
+
+  return `${shipClause || ''}敵航空攻勢ハ主戦闘前既ニ挫折セリ。`
+}
+
+const buildShortAntiAirBullet = (truthSource: WarReportTruthSource | null) => {
+  const aggregate = buildSortieAntiAirAggregate(truthSource)
+  if (!aggregate?.triggered) {
+    return ''
+  }
+
+  if (aggregate.truthLoss != null && aggregate.truthLoss >= 20) {
+    const reportedLoss = roundUp10(
+      Math.max(aggregate.truthLoss * 3.5, aggregate.truthLoss + 100),
+    )
+    if (aggregate.shipName) {
+      return `「${aggregate.shipName}」奮戦、敵機${formatApproximatePlaneCount(reportedLoss)}ヲ掃蕩。`
+    }
+    return `敵航空攻勢、敵機${formatApproximatePlaneCount(reportedLoss)}喪失ノ裡ニ潰滅。`
+  }
+
+  if (aggregate.shipName) {
+    return `「${aggregate.shipName}」防空勇戦、敵航空兵力著減。`
+  }
+
+  return '防空成功、敵航空兵力著減。'
+}
 
 const mixSeed = (seed: number, slot: string) => {
   let value = seed >>> 0
@@ -1829,6 +1959,11 @@ const buildFormalNodeLines = (
     `　我方被害　${buildFormalOwnDamageSentence(battle, context, index, seed)}`,
   ]
 
+  const antiAirSentence = buildFormalAntiAirSentence(battle)
+  if (antiAirSentence) {
+    lines.push(antiAirSentence)
+  }
+
   return lines
 }
 
@@ -2003,6 +2138,9 @@ const buildStandardBulletin = (
     ),
   ].filter(Boolean)
 
+  const antiAirParagraph =
+    context.kind === 'sortie' ? buildStandardAntiAirSentence(options.truthSource ?? null) : ''
+
   const report: GeneratedWarReport = {
     bulletin: [
       '大本営海軍部発表',
@@ -2037,6 +2175,7 @@ const buildStandardBulletin = (
         `standard_bulletin:damageClaim:${damageClaimFamily?.id ?? 'fallback'}`,
         damageClaimFamily?.variants ?? ['我部隊ハ主導権ヲ掌握シ、作戦目的達成ニ寄与セリ。'],
       ),
+      ...(antiAirParagraph ? ['', antiAirParagraph] : []),
       '',
       buildPublicBodyLead(context, 'standard_bulletin', fingerprint),
       '',
@@ -2105,7 +2244,24 @@ const buildShortBulletin = (
     slotFamilies,
   )
 
-  const bulletinLines = [
+  const antiAirBullet =
+    context.kind === 'sortie' ? buildShortAntiAirBullet(options.truthSource ?? null) : ''
+
+  const bulletinLines = antiAirBullet
+    ? [
+        pickVariant(
+          fingerprint,
+          `short_bulletin:initiative:${openingFamily?.id ?? 'fallback'}`,
+          openingFamily?.variants ?? ['我軍、攻撃ヲ開始セリ。'],
+        ),
+        pickVariant(
+          fingerprint,
+          `short_bulletin:damageClaim:${damageClaimFamily?.id ?? 'fallback'}`,
+          damageClaimFamily?.variants ?? ['敵企図ヲ挫折セシメタリ。'],
+        ),
+        antiAirBullet,
+      ]
+    : [
     pickVariant(
       fingerprint,
       `short_bulletin:initiative:${openingFamily?.id ?? 'fallback'}`,
@@ -2129,7 +2285,7 @@ const buildShortBulletin = (
       `short_bulletin:closing:${closingFamily?.id ?? 'fallback'}`,
       closingFamily?.variants ?? ['戦果顕著ナリ。'],
     ),
-  ].filter(Boolean)
+      ].filter(Boolean)
 
   return {
     bulletin: [

@@ -131,6 +131,13 @@ export type FriendlyHighlightFlags = {
   mvpHighlighted: boolean
 }
 
+export type AntiAirSummary = {
+  triggered: boolean
+  shipNameRaw: string | null
+  ciKind: number | null
+  enemyPlaneLoss: number | null
+}
+
 export type BattleNodeCapture = {
   occurredAt: number
   mode: BattleMode
@@ -144,6 +151,7 @@ export type BattleNodeCapture = {
   damageSummary: DamageSummary
   sawAirAttack: boolean
   antiAirScreen: boolean
+  antiAirSummary?: AntiAirSummary | null
   flagshipNameRaw: string | null
   mvpNameRaw: string | null
 }

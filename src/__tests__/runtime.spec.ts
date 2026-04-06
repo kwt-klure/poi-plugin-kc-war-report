@@ -1,6 +1,7 @@
 import { normalizeSortieSession } from '../battle/model'
 import {
   __detectAirAttackFromPacketForTests,
+  __extractAntiAirSummaryFromPacketForTests,
   __resolveDeckIdForTests,
   refreshFleetSnapshotFromStore,
 } from '../battle/runtime'
@@ -173,5 +174,75 @@ describe('battle runtime fleet refresh', () => {
         },
       }),
     ).toBe(true)
+  })
+
+  it('extracts anti-air summary from api_air_fire and enemy lost counts', () => {
+    const summary = __extractAntiAirSummaryFromPacketForTests(
+      {
+        api_kouku: {
+          api_stage2: {
+            api_e_lostcount: [18, 24, 0, 11],
+            api_air_fire: {
+              api_idx: 1,
+              api_kind: 3,
+            },
+          },
+        },
+      },
+      sortieShips,
+    )
+
+    expect(summary).toEqual({
+      triggered: true,
+      shipNameRaw: '最上改二特',
+      ciKind: 3,
+      enemyPlaneLoss: 53,
+    })
+  })
+
+  it('accumulates enemy plane losses across multiple visible air phases', () => {
+    const summary = __extractAntiAirSummaryFromPacketForTests(
+      {
+        api_kouku: {
+          api_stage2: {
+            api_e_lostcount: [8, 12],
+            api_air_fire: {
+              api_idx: 0,
+              api_kind: 1,
+            },
+          },
+        },
+        api_injection_kouku: {
+          api_stage2: {
+            api_e_lostcount: [6, 4],
+          },
+        },
+        api_air_base_attack: [
+          {
+            api_stage2: {
+              api_e_lostcount: [10],
+            },
+          },
+        ],
+      },
+      sortieShips,
+    )
+
+    expect(summary?.enemyPlaneLoss).toBe(40)
+  })
+
+  it('does not build anti-air summary when api_air_fire is absent', () => {
+    const summary = __extractAntiAirSummaryFromPacketForTests(
+      {
+        api_kouku: {
+          api_stage2: {
+            api_e_lostcount: [30, 18],
+          },
+        },
+      },
+      sortieShips,
+    )
+
+    expect(summary).toBeNull()
   })
 })

@@ -148,6 +148,78 @@ const practiceCapture: BattleCapture = {
   mvpNameRaw: 'Atlanta',
 }
 
+const antiAirShips: FleetShipSnapshot[] = [
+  {
+    instanceId: 31,
+    shipId: 900,
+    nameJa: '初月改二',
+    typeId: 2,
+    typeNameJa: '駆逐艦',
+    level: 99,
+    startHp: 37,
+    endHp: 37,
+    maxHp: 37,
+  },
+  {
+    instanceId: 32,
+    shipId: 901,
+    nameJa: '矢矧改二乙',
+    typeId: 3,
+    typeNameJa: '軽巡洋艦',
+    level: 99,
+    startHp: 53,
+    endHp: 53,
+    maxHp: 53,
+  },
+  {
+    instanceId: 33,
+    shipId: 902,
+    nameJa: '最上改二特',
+    typeId: 5,
+    typeNameJa: '航空巡洋艦',
+    level: 99,
+    startHp: 57,
+    endHp: 57,
+    maxHp: 57,
+  },
+]
+
+const antiAirBattle: BattleNodeCapture = {
+  occurredAt: Date.UTC(2026, 2, 29, 2, 20, 0),
+  mode: 'boss',
+  nodeLabel: 'Node 18',
+  operationLabelRaw: '7-2-2 ペナン島沖',
+  operationPhraseRaw: 'ペナン島沖',
+  friendlyFleet: antiAirShips,
+  enemyDeckNameRaw: '敵航空兵力',
+  enemyShipNamesRaw: ['正規空母ヲ級改flagship', '軽巡ツ級'],
+  winRank: 'A',
+  damageSummary: buildDamageAssessment(antiAirShips),
+  sawAirAttack: true,
+  antiAirScreen: true,
+  antiAirSummary: {
+    triggered: true,
+    shipNameRaw: '初月改二',
+    ciKind: 3,
+    enemyPlaneLoss: 53,
+  },
+  flagshipNameRaw: '初月改二',
+  mvpNameRaw: '初月改二',
+}
+
+const antiAirSortieSession: SortieSessionCapture = {
+  id: 'sortie-aa-1',
+  startedAt: Date.UTC(2026, 2, 29, 2, 10, 0),
+  updatedAt: Date.UTC(2026, 2, 29, 2, 25, 0),
+  mapLabel: '7-2',
+  operationLabelRaw: 'ペナン島沖',
+  operationPhraseRaw: 'ペナン島沖',
+  friendlyFleetInitial: antiAirShips,
+  friendlyFleetLatest: antiAirShips,
+  nodeTrail: ['Node 3', 'Node 18'],
+  battles: [antiAirBattle],
+}
+
 describe('war report sortie architecture', () => {
   it('normalizes foreign friendly ship names into katakana aliases', () => {
     expect(normalizeFriendlyReportName('Johnston改')).toBe('ジョンストン')
@@ -373,6 +445,65 @@ describe('war report sortie architecture', () => {
     expect(formal.body).not.toContain('最上改二特')
     expect(formal.body).toContain('「神風」')
     expect(formal.body).toContain('「フレッチャー」')
+  })
+
+  it('writes anti-air credit back into all three document voices without leaking game mechanic terms', () => {
+    const record = normalizeSortieSession(antiAirSortieSession, 'completed')
+
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: antiAirSortieSession,
+      },
+    })
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: antiAirSortieSession,
+      },
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const short = buildWarReportFromRecord(record, 'short_bulletin', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: antiAirSortieSession,
+      },
+    })
+
+    expect(formal.body).toContain('防空戦果')
+    expect(formal.body).toContain('「初月」防空射撃ニ当リ、敵機計五十三機ヲ撃墜。')
+    expect(standard.body).toContain('「初月」ノ防空戦闘鋭甚ニシテ、敵機百四十余機ヲ撃滅セリ。')
+    expect(short.body).toContain('「初月」奮戦、敵機百九十余機ヲ掃蕩。')
+
+    for (const text of [`${formal.bulletin}\n${formal.body}`, `${standard.bulletin}\n${standard.body}`, `${short.bulletin}\n${short.body}`]) {
+      expect(text).not.toContain('対空CI')
+      expect(text).not.toContain('カットイン')
+      expect(text).not.toContain('slot')
+      expect(text).not.toContain('trigger')
+      expect(text).not.toContain('proc')
+      expect(text).not.toContain('初月改二')
+      expect(text).not.toContain('矢矧改二乙')
+      expect(text).not.toContain('最上改二特')
+    }
+  })
+
+  it('does not add anti-air credit lines when no anti-air summary exists', () => {
+    const record = normalizeSortieSession(sortieSession, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: sortieSession,
+    }
+
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource,
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const short = buildWarReportFromRecord(record, 'short_bulletin', { truthSource })
+
+    expect(formal.body).not.toContain('防空戦果')
+    expect(standard.body).not.toContain('敵機百')
+    expect(short.body).not.toContain('敵機百')
   })
 
   it('renders successful sortie damage differently across the three styles', () => {
