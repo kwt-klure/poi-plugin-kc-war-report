@@ -203,6 +203,11 @@ const antiAirBattle: BattleNodeCapture = {
     ciKind: 3,
     enemyPlaneLoss: 53,
   },
+  carrierAirLossSummary: {
+    triggered: true,
+    carrierLossCount: 1,
+    carrierAircraftLossEstimate: 118,
+  },
   flagshipNameRaw: '初月改二',
   mvpNameRaw: '初月改二',
 }
@@ -473,7 +478,17 @@ describe('war report sortie architecture', () => {
     expect(formal.body).toContain('防空戦果')
     expect(formal.body).toContain('「初月」防空射撃ニ当リ、敵機計五十三機ヲ撃墜。')
     expect(standard.body).toContain('「初月」ノ防空戦闘鋭甚ニシテ、敵機百四十余機ヲ撃滅セリ。')
-    expect(short.body).toContain('「初月」奮戦、敵機百九十余機ヲ掃蕩。')
+    expect(short.body).toMatch(
+      /敵艦載機三百余機、母艦諸共喪失。|敵航空兵力三百余機壊滅。|敵艦載機三百余機海没。/,
+    )
+    expect(short.body).not.toContain('「初月」奮戦、敵機百九十余機ヲ掃蕩。')
+
+    expect(formal.body).toMatch(
+      /敵空母損失ニ伴ヒ、搭載敵機計百十八機喪失ト認ム。|敵空母被害ニ伴ヒ、敵航空兵力亦大損耗ヲ生ジ、搭載敵機計百十八機喪失ト認ム。/,
+    )
+    expect(standard.body).toMatch(
+      /敵艦載機二百余機亦海中ニ葬レリ。|敵母艦群損失ニ伴ヒ、艦載機二百余機喪失セリ。|敵航空戦力亦同時ニ二百余機ヲ失ヒ大損害ヲ受ケタリ。/,
+    )
 
     for (const text of [`${formal.bulletin}\n${formal.body}`, `${standard.bulletin}\n${standard.body}`, `${short.bulletin}\n${short.body}`]) {
       expect(text).not.toContain('対空CI')
@@ -504,6 +519,26 @@ describe('war report sortie architecture', () => {
     expect(formal.body).not.toContain('防空戦果')
     expect(standard.body).not.toContain('敵機百')
     expect(short.body).not.toContain('敵機百')
+  })
+
+  it('uses banded propaganda numbers for carrier-air-loss lines across the three document voices', () => {
+    const record = normalizeSortieSession(antiAirSortieSession, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: antiAirSortieSession,
+    }
+
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource,
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const short = buildWarReportFromRecord(record, 'short_bulletin', { truthSource })
+
+    expect(formal.body).toContain('百十八機喪失ト認ム。')
+    expect(standard.body).toContain('二百余機')
+    expect(short.body).toContain('三百余機')
+    expect(short.body).not.toContain('二百余機')
   })
 
   it('renders successful sortie damage differently across the three styles', () => {

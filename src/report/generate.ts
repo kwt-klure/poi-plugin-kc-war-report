@@ -240,6 +240,33 @@ const formatExactPlaneCount = (value: number) => `${toFormalKansuji(value)}機`
 
 const formatApproximatePlaneCount = (value: number) => `${toFormalKansuji(value)}余機`
 
+const toCarrierAircraftPropagandaBand = (
+  value: number,
+  style: 'standard_bulletin' | 'short_bulletin',
+) => {
+  if (value < 20) {
+    return null
+  }
+
+  if (value < 50) {
+    return style === 'standard_bulletin' ? '五十余' : '百余'
+  }
+
+  if (value < 100) {
+    return style === 'standard_bulletin' ? '百二十余' : '二百余'
+  }
+
+  if (value < 150) {
+    return style === 'standard_bulletin' ? '二百余' : '三百余'
+  }
+
+  if (value < 250) {
+    return style === 'standard_bulletin' ? '三百余' : '五百余'
+  }
+
+  return style === 'standard_bulletin' ? '五百余' : '七百余'
+}
+
 const buildSortieAntiAirAggregate = (truthSource: WarReportTruthSource | null) => {
   if (truthSource?.kind !== 'sortie') {
     return null
@@ -271,6 +298,36 @@ const buildSortieAntiAirAggregate = (truthSource: WarReportTruthSource | null) =
   }
 }
 
+const buildSortieCarrierAirLossAggregate = (truthSource: WarReportTruthSource | null) => {
+  if (truthSource?.kind !== 'sortie') {
+    return null
+  }
+
+  const summaries = truthSource.sortie.battles
+    .map((battle) => battle.carrierAirLossSummary)
+    .filter((summary): summary is NonNullable<typeof summary> => summary?.triggered === true)
+
+  if (summaries.length === 0) {
+    return null
+  }
+
+  const truthLoss = summaries.reduce(
+    (sum, summary) => sum + (summary.carrierAircraftLossEstimate ?? 0),
+    0,
+  )
+  const carrierLossCount = summaries.reduce((sum, summary) => sum + summary.carrierLossCount, 0)
+
+  if (carrierLossCount <= 0 || truthLoss <= 0) {
+    return null
+  }
+
+  return {
+    triggered: true,
+    carrierLossCount,
+    truthLoss,
+  }
+}
+
 const buildFormalAntiAirSentence = (
   battle: BattleNodeCapture,
 ) => {
@@ -292,6 +349,23 @@ const buildFormalAntiAirSentence = (
   return '　防空戦果　防空戦闘ニ依リ敵航空兵力ニ損耗ヲ生ゼシム。'
 }
 
+const buildFormalCarrierAirLossSentence = (
+  truthSource: WarReportTruthSource | null,
+  seed: number,
+) => {
+  const aggregate = buildSortieCarrierAirLossAggregate(truthSource)
+  if (!aggregate?.triggered) {
+    return null
+  }
+
+  return pickVariant(seed, 'formal_after_action:carrierAirLoss', [
+    `　敵空母損失ニ伴ヒ、搭載敵機計${formatExactPlaneCount(aggregate.truthLoss)}喪失ト認ム。`,
+    `　敵空母被害ニ伴ヒ、敵航空兵力亦大損耗ヲ生ジ、搭載敵機計${formatExactPlaneCount(
+      aggregate.truthLoss,
+    )}喪失ト認ム。`,
+  ])
+}
+
 const buildStandardAntiAirSentence = (truthSource: WarReportTruthSource | null) => {
   const aggregate = buildSortieAntiAirAggregate(truthSource)
   if (!aggregate?.triggered) {
@@ -307,6 +381,27 @@ const buildStandardAntiAirSentence = (truthSource: WarReportTruthSource | null) 
   }
 
   return `${shipClause || ''}敵航空攻勢ハ主戦闘前既ニ挫折セリ。`
+}
+
+const buildStandardCarrierAirLossSentence = (
+  truthSource: WarReportTruthSource | null,
+  seed: number,
+) => {
+  const aggregate = buildSortieCarrierAirLossAggregate(truthSource)
+  if (!aggregate?.triggered) {
+    return ''
+  }
+
+  const reported = toCarrierAircraftPropagandaBand(aggregate.truthLoss, 'standard_bulletin')
+  if (!reported) {
+    return ''
+  }
+
+  return pickVariant(seed, 'standard_bulletin:carrierAirLoss', [
+    `敵艦載機${reported}機亦海中ニ葬レリ。`,
+    `敵母艦群損失ニ伴ヒ、艦載機${reported}機喪失セリ。`,
+    `敵航空戦力亦同時ニ${reported}機ヲ失ヒ大損害ヲ受ケタリ。`,
+  ])
 }
 
 const buildShortAntiAirBullet = (truthSource: WarReportTruthSource | null) => {
@@ -330,6 +425,27 @@ const buildShortAntiAirBullet = (truthSource: WarReportTruthSource | null) => {
   }
 
   return '防空成功、敵航空兵力著減。'
+}
+
+const buildShortCarrierAirLossBullet = (
+  truthSource: WarReportTruthSource | null,
+  seed: number,
+) => {
+  const aggregate = buildSortieCarrierAirLossAggregate(truthSource)
+  if (!aggregate?.triggered) {
+    return ''
+  }
+
+  const reported = toCarrierAircraftPropagandaBand(aggregate.truthLoss, 'short_bulletin')
+  if (!reported) {
+    return ''
+  }
+
+  return pickVariant(seed, 'short_bulletin:carrierAirLoss', [
+    `敵艦載機${reported}機、母艦諸共喪失。`,
+    `敵航空兵力${reported}機壊滅。`,
+    `敵艦載機${reported}機海没。`,
+  ])
 }
 
 const mixSeed = (seed: number, slot: string) => {
@@ -2044,6 +2160,10 @@ const buildFormalSortieBody = (
 
   lines.push('五、戦果。')
   lines.push(`　戦果総括　${buildFormalOverallResultSentence(context)}`)
+  const carrierAirLossSentence = buildFormalCarrierAirLossSentence(truthSource, seed)
+  if (carrierAirLossSentence) {
+    lines.push(carrierAirLossSentence)
+  }
   lines.push(`　敵情総括　${buildEncounterObject(context)}。`)
   lines.push(`　行動総括　${buildFormalActionSummary(context)}`)
   lines.push(...buildFormalDamageSummaryLines(context, '六'))
@@ -2140,6 +2260,10 @@ const buildStandardBulletin = (
 
   const antiAirParagraph =
     context.kind === 'sortie' ? buildStandardAntiAirSentence(options.truthSource ?? null) : ''
+  const carrierAirLossParagraph =
+    context.kind === 'sortie'
+      ? buildStandardCarrierAirLossSentence(options.truthSource ?? null, fingerprint)
+      : ''
 
   const report: GeneratedWarReport = {
     bulletin: [
@@ -2176,6 +2300,7 @@ const buildStandardBulletin = (
         damageClaimFamily?.variants ?? ['我部隊ハ主導権ヲ掌握シ、作戦目的達成ニ寄与セリ。'],
       ),
       ...(antiAirParagraph ? ['', antiAirParagraph] : []),
+      ...(carrierAirLossParagraph ? ['', carrierAirLossParagraph] : []),
       '',
       buildPublicBodyLead(context, 'standard_bulletin', fingerprint),
       '',
@@ -2246,8 +2371,14 @@ const buildShortBulletin = (
 
   const antiAirBullet =
     context.kind === 'sortie' ? buildShortAntiAirBullet(options.truthSource ?? null) : ''
+  const carrierAirLossBullet =
+    context.kind === 'sortie'
+      ? buildShortCarrierAirLossBullet(options.truthSource ?? null, fingerprint)
+      : ''
 
-  const bulletinLines = antiAirBullet
+  const priorityThirdBullet = carrierAirLossBullet || antiAirBullet
+
+  const bulletinLines = priorityThirdBullet
     ? [
         pickVariant(
           fingerprint,
@@ -2259,7 +2390,7 @@ const buildShortBulletin = (
           `short_bulletin:damageClaim:${damageClaimFamily?.id ?? 'fallback'}`,
           damageClaimFamily?.variants ?? ['敵企図ヲ挫折セシメタリ。'],
         ),
-        antiAirBullet,
+        priorityThirdBullet,
       ]
     : [
     pickVariant(

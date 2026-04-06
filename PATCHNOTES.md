@@ -1,5 +1,55 @@
 # Patch Notes
 
+## 0.4.12
+
+This workspace adds a second aviation-facing truth-event line:
+
+- anti-air credit is still its own feature
+- carrier-loss-implied embarked aircraft loss is now tracked separately
+
+The point is not to simulate the whole air battle.
+The point is to let old-style reports do the obvious old-style thing:
+if enemy carriers are ruined, the documents should also know how to talk about the aircraft that went down with them.
+
+この workspace では、航空戦関連の truth-event をもう一段追加しました。
+
+- 防空戦果は従来どおり独立機能
+- 敵空母損失に伴う艦載機喪失 line を新たに別管理
+
+狙いは航空戦 simulator 化ではありません。
+敵空母が重創以上となったなら、老派 generator もまた艦載機喪失を順当に書けるようにすることです。
+
+### Changed
+
+- `truth capture`
+  - enemy carrier heavy-loss heuristic から `CarrierAirLossSummary` を拾う
+  - enemy carrier aircraft total base is wired from ship master `api_maxeq`
+- `硬派詳報`
+  - 第五節に carrier-air-loss line を自然追加
+  - 数字は truth-first、語尾は保守寄り
+- `標準公報`
+  - 艦載機喪失を独立の公報句として追加
+  - 数字は fixed propaganda bands で浮報
+- `短報`
+  - 第三 bullet は carrier-air-loss を優先
+  - `防空戦果` bullet より headline 性の高い艦載機喪失 line を採用
+- `README`
+  - `敵艦載機喪失` の出力イメージを追加
+  - 既存の `防空戦果` 例も `機` 付き表記へ同期
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand src/__tests__/runtime.spec.ts src/__tests__/report.spec.ts
+npm run typeCheck
+npm test -- --runInBand
+git diff --check
+```
+
+All checks passed in this workspace.
+
 ## 0.4.11
 
 This release adds a small anti-air truth-event layer and routes it back into all three live report voices.

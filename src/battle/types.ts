@@ -138,6 +138,13 @@ export type AntiAirSummary = {
   enemyPlaneLoss: number | null
 }
 
+export type CarrierAirLossSummary = {
+  triggered: boolean
+  carrierLossCount: number
+  // This is a document-facing heuristic base, not a literal historical sink-with-airgroup truth.
+  carrierAircraftLossEstimate: number | null
+}
+
 export type BattleNodeCapture = {
   occurredAt: number
   mode: BattleMode
@@ -152,6 +159,7 @@ export type BattleNodeCapture = {
   sawAirAttack: boolean
   antiAirScreen: boolean
   antiAirSummary?: AntiAirSummary | null
+  carrierAirLossSummary?: CarrierAirLossSummary | null
   flagshipNameRaw: string | null
   mvpNameRaw: string | null
 }

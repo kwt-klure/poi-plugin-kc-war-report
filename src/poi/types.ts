@@ -43,6 +43,7 @@ export type PoiShipMaster = {
   api_name?: string
   api_yomi?: string
   api_stype?: number
+  api_maxeq?: number[]
   api_aftershipid?: string | number
   api_houg?: PoiShipStat
   api_raig?: PoiShipStat

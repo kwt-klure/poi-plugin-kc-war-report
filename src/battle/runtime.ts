@@ -22,6 +22,7 @@ import type {
   BattleCapture,
   BattleMode,
   BattleNodeCapture,
+  CarrierAirLossSummary,
   FleetShipSnapshot,
   SortieSessionCapture,
   WarReportHistoryEntry,
@@ -47,6 +48,8 @@ type ResultBody = {
 
 type BattlePacket = {
   api_ship_ke?: number[]
+  api_e_nowhps?: number[]
+  api_e_maxhps?: number[]
   api_kouku?: unknown
   api_injection_kouku?: unknown
   api_air_base_attack?: unknown[]
@@ -65,6 +68,7 @@ type CurrentBattleContext = {
   enemyShipIds: number[]
   sawAirAttack: boolean
   antiAirSummary: AntiAirSummary | null
+  carrierAirLossSummary: CarrierAirLossSummary | null
 }
 
 type PendingFinalize = {
@@ -361,6 +365,20 @@ const getBattleAirPhases = (packet: BattlePacket) => [
   packet.api_friendly_kouku,
 ].filter((phase) => phase != null)
 
+const carrierShipTypeIds = new Set([7, 11, 18])
+
+const getShipMasterById = (shipId: number) =>
+  getArrayValue(
+    getStoreValue<Record<string, PoiShipMaster> | PoiShipMaster[]>(['const', '$ships']) ?? null,
+    shipId,
+  )
+
+const isCarrierShipMaster = (master: PoiShipMaster | null) =>
+  master?.api_stype != null && carrierShipTypeIds.has(master.api_stype)
+
+const sumPositiveNumbers = (values: number[]) =>
+  values.reduce((sum, value) => sum + (Number.isFinite(value) && value > 0 ? value : 0), 0)
+
 const extractAntiAirSummaryFromPacket = (
   packet: BattlePacket,
   fleetShips: FleetShipSnapshot[],
@@ -400,6 +418,70 @@ const extractAntiAirSummaryFromPacket = (
   }
 }
 
+const extractCarrierAirLossSummaryFromPacket = (
+  packet: BattlePacket,
+): CarrierAirLossSummary | null => {
+  const enemyShipIds = packet.api_ship_ke
+  const enemyNowHps = packet.api_e_nowhps
+  const enemyMaxHps = packet.api_e_maxhps
+
+  if (
+    !enemyShipIds ||
+    !enemyNowHps ||
+    !enemyMaxHps ||
+    enemyShipIds.length === 0 ||
+    enemyShipIds.length !== enemyNowHps.length ||
+    enemyShipIds.length !== enemyMaxHps.length
+  ) {
+    return null
+  }
+
+  let carrierLossCount = 0
+  let carrierAircraftLossEstimate = 0
+
+  for (let index = 0; index < enemyShipIds.length; index += 1) {
+    const enemyShipId = enemyShipIds[index]
+    const endHp = enemyNowHps[index]
+    const maxHp = enemyMaxHps[index]
+    if (
+      typeof enemyShipId !== 'number' ||
+      enemyShipId <= 0 ||
+      typeof endHp !== 'number' ||
+      typeof maxHp !== 'number' ||
+      maxHp <= 0
+    ) {
+      continue
+    }
+
+    const master = getShipMasterById(enemyShipId)
+    if (!isCarrierShipMaster(master)) {
+      continue
+    }
+
+    if (endHp / maxHp > 0.25) {
+      continue
+    }
+
+    const maxeq = master?.api_maxeq
+    if (!Array.isArray(maxeq) || maxeq.length === 0) {
+      return null
+    }
+
+    carrierLossCount += 1
+    carrierAircraftLossEstimate += sumPositiveNumbers(maxeq)
+  }
+
+  if (carrierLossCount === 0 || carrierAircraftLossEstimate <= 0) {
+    return null
+  }
+
+  return {
+    triggered: true,
+    carrierLossCount,
+    carrierAircraftLossEstimate,
+  }
+}
+
 const mergeAntiAirSummary = (
   current: AntiAirSummary | null,
   next: AntiAirSummary | null,
@@ -422,6 +504,26 @@ const mergeAntiAirSummary = (
     shipNameRaw: current.shipNameRaw ?? next.shipNameRaw,
     ciKind: current.ciKind ?? next.ciKind,
     enemyPlaneLoss: mergedLoss != null && mergedLoss > 0 ? mergedLoss : null,
+  }
+}
+
+const mergeCarrierAirLossSummary = (
+  current: CarrierAirLossSummary | null,
+  next: CarrierAirLossSummary | null,
+): CarrierAirLossSummary | null => {
+  if (!current) {
+    return next
+  }
+
+  if (!next) {
+    return current
+  }
+
+  return {
+    triggered: current.triggered || next.triggered,
+    carrierLossCount: current.carrierLossCount + next.carrierLossCount,
+    carrierAircraftLossEstimate:
+      (current.carrierAircraftLossEstimate ?? 0) + (next.carrierAircraftLossEstimate ?? 0),
   }
 }
 
@@ -512,6 +614,9 @@ const buildBattleNodeCapture = (
     sawAirAttack: context.sawAirAttack,
     antiAirScreen,
     antiAirSummary: context.antiAirSummary ? { ...context.antiAirSummary } : null,
+    carrierAirLossSummary: context.carrierAirLossSummary
+      ? { ...context.carrierAirLossSummary }
+      : null,
     flagshipNameRaw: friendlyFleet[0]?.nameJa ?? null,
     mvpNameRaw: mvpShip?.nameJa ?? null,
   }
@@ -744,6 +849,7 @@ const beginSortieBattleContext = (detail: GameResponseDetail) => {
     enemyShipIds: [],
     sawAirAttack: false,
     antiAirSummary: null,
+    carrierAirLossSummary: null,
   }
 }
 
@@ -764,6 +870,7 @@ const beginPracticeBattleContext = (detail: GameResponseDetail) => {
     enemyShipIds: [],
     sawAirAttack: false,
     antiAirSummary: null,
+    carrierAirLossSummary: null,
   }
 }
 
@@ -783,6 +890,10 @@ const updateCurrentBattleFromPacket = (packet: BattlePacket) => {
   currentBattle.antiAirSummary = mergeAntiAirSummary(
     currentBattle.antiAirSummary,
     extractAntiAirSummaryFromPacket(packet, currentBattle.fleetShips),
+  )
+  currentBattle.carrierAirLossSummary = mergeCarrierAirLossSummary(
+    currentBattle.carrierAirLossSummary,
+    extractCarrierAirLossSummaryFromPacket(packet),
   )
 }
 
@@ -877,3 +988,7 @@ export const __extractAntiAirSummaryFromPacketForTests = (
   packet: BattlePacket,
   fleetShips: FleetShipSnapshot[],
 ) => extractAntiAirSummaryFromPacket(packet, fleetShips)
+
+export const __extractCarrierAirLossSummaryFromPacketForTests = (
+  packet: BattlePacket,
+) => extractCarrierAirLossSummaryFromPacket(packet)

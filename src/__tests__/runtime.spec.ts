@@ -2,6 +2,7 @@ import { normalizeSortieSession } from '../battle/model'
 import {
   __detectAirAttackFromPacketForTests,
   __extractAntiAirSummaryFromPacketForTests,
+  __extractCarrierAirLossSummaryFromPacketForTests,
   __resolveDeckIdForTests,
   refreshFleetSnapshotFromStore,
 } from '../battle/runtime'
@@ -242,6 +243,97 @@ describe('battle runtime fleet refresh', () => {
       },
       sortieShips,
     )
+
+    expect(summary).toBeNull()
+  })
+
+  it('extracts carrier-air-loss summary when enemy carriers end the battle at heavy damage or worse', () => {
+    const state: PoiState = {
+      ui: {
+        activeMainTab: '',
+      },
+      plugins: [],
+      const: {
+        $ships: {
+          '1901': {
+            api_name: '空母ヲ級改',
+            api_stype: 11,
+            api_maxeq: [18, 36, 36, 28],
+          },
+          '1902': {
+            api_name: '軽巡ツ級',
+            api_stype: 3,
+          },
+        },
+      },
+    }
+
+    importPoiState(state)
+
+    const summary = __extractCarrierAirLossSummaryFromPacketForTests({
+      api_ship_ke: [1901, 1902],
+      api_e_nowhps: [20, 30],
+      api_e_maxhps: [80, 30],
+    })
+
+    expect(summary).toEqual({
+      triggered: true,
+      carrierLossCount: 1,
+      carrierAircraftLossEstimate: 118,
+    })
+  })
+
+  it('does not build carrier-air-loss summary for non-carrier losses', () => {
+    const state: PoiState = {
+      ui: {
+        activeMainTab: '',
+      },
+      plugins: [],
+      const: {
+        $ships: {
+          '1951': {
+            api_name: '重巡ネ級',
+            api_stype: 5,
+            api_maxeq: [18, 18, 18],
+          },
+        },
+      },
+    }
+
+    importPoiState(state)
+
+    const summary = __extractCarrierAirLossSummaryFromPacketForTests({
+      api_ship_ke: [1951],
+      api_e_nowhps: [10],
+      api_e_maxhps: [40],
+    })
+
+    expect(summary).toBeNull()
+  })
+
+  it('does not build carrier-air-loss summary when carrier maxeq data is unavailable', () => {
+    const state: PoiState = {
+      ui: {
+        activeMainTab: '',
+      },
+      plugins: [],
+      const: {
+        $ships: {
+          '1991': {
+            api_name: '空母ヲ級flagship',
+            api_stype: 11,
+          },
+        },
+      },
+    }
+
+    importPoiState(state)
+
+    const summary = __extractCarrierAirLossSummaryFromPacketForTests({
+      api_ship_ke: [1991],
+      api_e_nowhps: [15],
+      api_e_maxhps: [70],
+    })
 
     expect(summary).toBeNull()
   })

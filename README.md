@@ -94,6 +94,7 @@ This plugin now tries to give at least a small place back to that kind of work:
 
 - `硬派詳報` can record defensive anti-air credit in a dry, internal-report register
 - `標準公報` and `短報` can then turn the same event into shameless headquarters-style enemy-aircraft claims
+- if enemy carriers are ruined, the documents can also treat their embarked aircraft as having gone down with them
 
 The point is not to become a battle simulator.
 The point is to let the documents remember that ships doing invisible work still mattered.
@@ -104,6 +105,7 @@ The point is to let the documents remember that ships doing invisible work still
 
 - `硬派詳報` は、防空戦果のような働きを乾いた内部文書調で記録できる
 - `標準公報` と `短報` は、同じ event を大本営風の敵機撃滅 claim へ書き換えられる
+- 敵空母が重創以上になった場合、その搭載機喪失も三文書へ書き戻せる
 
 狙いは battle simulator 化ではありません。
 見えにくい働きも、文書の側ではきちんと記憶させることです。
@@ -414,7 +416,7 @@ Current polish work is kept intentionally render-layer-first and corpus-first: s
 
 某方面交戦、敵航空攻勢ヲ挫折
 
-殊ニ「初月」ノ防空戦闘鋭甚ニシテ、敵機百四十余ヲ撃滅セリ。
+殊ニ「初月」ノ防空戦闘鋭甚ニシテ、敵機百四十余機ヲ撃滅セリ。
 ```
 
 ```text
@@ -425,8 +427,44 @@ Current polish work is kept intentionally render-layer-first and corpus-first: s
 某方面、敵航空攻勢ヲ粉砕
 
 一、我軍、攻撃ヲ開始セリ。
-二、「初月」奮戦、敵機百九十余ヲ掃蕩。
+二、「初月」奮戦、敵機百九十余機ヲ掃蕩。
 三、右、発表ス。
+```
+
+### `敵艦載機喪失` を含む出力イメージ
+
+```text
+戦闘詳報
+令和八年四月六日
+於 某海域
+
+五、戦果。
+　戦果総括　敵ニ有効打撃ヲ与ヘ、所定行動ヲ完遂。
+　敵空母損失ニ伴ヒ、搭載敵機計百十八機喪失ト認ム。
+　敵情総括　敵主力艦隊。
+　行動総括　敵主力艦隊ニ対シ所定ノ戦闘行動ヲ実施。
+```
+
+```text
+大本営海軍部発表
+
+令和八年四月六日
+
+某方面作戦、戦果顕著
+
+敵母艦群損失ニ伴ヒ、艦載機二百余機喪失セリ。
+```
+
+```text
+大本営海軍部発表
+
+令和八年四月六日
+
+某方面交戦、赫々タル戦果ヲ収ム
+
+一、我軍、攻撃ヲ開始セリ。
+二、敵主力ニ大打撃ヲ加ヘタリ。
+三、敵艦載機三百余機、母艦諸共喪失。
 ```
 
 ### `戦闘参考詳報`
@@ -533,7 +571,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.11.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.12.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update
