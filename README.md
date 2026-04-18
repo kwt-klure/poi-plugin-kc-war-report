@@ -182,6 +182,34 @@ It is a core part of the plugin's "for fun" voice.
 この食い違いは偶然ではありません。
 この plugin の "for fun" な声の中心です。
 
+## Claim Precedence Matters
+
+The public voices do not just exaggerate harder than `硬派詳報`.
+They are also supposed to **promote different facts to different slots**.
+
+That means:
+
+- the strongest claim should reach the headline or lead
+- `短報` should not read like a compressed `標準公報`
+- high-glory sorties should prefer result-first bulletin claims over process wording
+- if the plugin already has a good numeric propaganda hook, `短報` should use it where it actually punches
+
+In practice, the work is not only "write a louder sentence".
+It is "make sure the most shameless claim gets the most visible slot".
+
+public voice は、`硬派詳報` より大きく誇張するだけでは足りません。
+**どの事実をどの句位に上げるか** も大事です。
+
+つまり、
+
+- その sortie で最も吹ける材料は headline や主文に上げる
+- `短報` は `標準公報` の圧縮版であってはならない
+- high-glory な sortie では、過程句より結果句を優先する
+- すでに数値として吹ける材料があるなら、`短報` はそれを punch のある位置で使う
+
+実際の課題は「もっと大きい形容詞を書く」ことではありません。
+「一番 shameless な claim を、一番目立つ slot に置く」ことです。
+
 ## What It Does Now
 
 ### 1. Live sortie documents
@@ -571,7 +599,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.12.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.13.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update

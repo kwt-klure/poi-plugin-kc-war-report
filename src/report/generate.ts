@@ -61,6 +61,14 @@ type PublicPropagandaProfile = {
   bulletinMode: PublicBulletinMode
 }
 
+type PublicClaimFocus =
+  | 'carrier_air_loss'
+  | 'transport'
+  | 'anti_air_numeric'
+  | 'air_power'
+  | 'main_force'
+  | 'generic'
+
 const toJapaneseDate = (timestamp: number) => {
   const date = new Date(timestamp)
   const year = date.getFullYear()
@@ -326,6 +334,62 @@ const buildSortieCarrierAirLossAggregate = (truthSource: WarReportTruthSource | 
     carrierLossCount,
     truthLoss,
   }
+}
+
+const hasFavorablePublicDamage = (context: ReportRenderContext) =>
+  context.damageSeverity === 'none' || context.damageSeverity === 'light'
+
+const shouldUseHighGloryShortMode = (
+  context: ReportRenderContext,
+  truthSource: WarReportTruthSource | null,
+) => {
+  if (context.kind !== 'sortie' || isAnyFailedSortie(context) || !hasFavorablePublicDamage(context)) {
+    return false
+  }
+
+  const antiAirAggregate = buildSortieAntiAirAggregate(truthSource)
+  const carrierAirAggregate = buildSortieCarrierAirLossAggregate(truthSource)
+  const hasNumericAirClaim = (antiAirAggregate?.truthLoss ?? 0) >= 20
+  const hasCarrierAirClaim = Boolean(carrierAirAggregate?.triggered)
+  const hasStrategicEnemy =
+    context.enemyCategory === 'main_force' ||
+    context.enemyCategory === 'transport_group' ||
+    context.enemyCategory === 'air_power'
+  const favorableResult =
+    context.resultCategory === 'decisive_success' ||
+    (context.resultCategory === 'success' && (hasNumericAirClaim || hasCarrierAirClaim))
+
+  return favorableResult && (hasStrategicEnemy || hasNumericAirClaim || hasCarrierAirClaim)
+}
+
+const selectPublicClaimFocus = (
+  context: ReportRenderContext,
+  truthSource: WarReportTruthSource | null,
+): PublicClaimFocus => {
+  const antiAirAggregate = buildSortieAntiAirAggregate(truthSource)
+  const carrierAirAggregate = buildSortieCarrierAirLossAggregate(truthSource)
+
+  if (carrierAirAggregate?.triggered) {
+    return 'carrier_air_loss'
+  }
+
+  if (context.enemyCategory === 'transport_group') {
+    return 'transport'
+  }
+
+  if ((antiAirAggregate?.truthLoss ?? 0) >= 20) {
+    return 'anti_air_numeric'
+  }
+
+  if (context.enemyCategory === 'air_power') {
+    return 'air_power'
+  }
+
+  if (context.enemyCategory === 'main_force') {
+    return 'main_force'
+  }
+
+  return 'generic'
 }
 
 const buildFormalAntiAirSentence = (
@@ -704,6 +768,7 @@ const buildMvpClause = (
 const buildHistoricalStandardHeadlineFamilies = (
   context: ReportRenderContext,
   profile: PublicPropagandaProfile,
+  focus: PublicClaimFocus = 'generic',
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -713,6 +778,58 @@ const buildHistoricalStandardHeadlineFamilies = (
           '対抗演習実施、演習成績概ネ良好',
           '対抗演習、部隊統制ノ充実ヲ示ス',
           '演習部隊、所定演習課目ヲ完遂',
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'carrier_air_loss') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-headline-carrier-focus',
+        variants: [
+          `${context.operationPhrase}方面作戦、敵航空戦力ニ大打撃`,
+          `${context.operationPhrase}方面交戦、敵母艦群ニ戦果顕著`,
+          `${context.operationPhrase}方面作戦、敵航空企図ヲ挫折`,
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'transport') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-headline-transport-focus',
+        variants: [
+          `${context.operationPhrase}方面作戦、敵輸送企図ヲ挫折`,
+          `${context.operationPhrase}方面交戦、敵上陸企図ヲ阻止`,
+          `${context.operationPhrase}方面作戦、敵輸送作戦ヲ阻碍`,
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'anti_air_numeric' || focus === 'air_power') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-headline-air-focus',
+        variants: [
+          `${context.operationPhrase}方面作戦、敵航空攻勢ヲ挫折`,
+          `${context.operationPhrase}方面交戦、敵航空兵力ニ大戦果`,
+          `${context.operationPhrase}方面作戦、敵航空企図ヲ覆滅`,
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'main_force') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-headline-main-force-focus',
+        variants: [
+          `${context.operationPhrase}方面作戦、戦果顕著`,
+          `${context.operationPhrase}方面交戦、敵主力ニ大打撃`,
+          `${context.operationPhrase}方面作戦、敵主力挫折`,
         ],
       },
     ])
@@ -773,6 +890,7 @@ const buildHistoricalStandardHeadlineFamilies = (
 const buildHistoricalStandardSubheadlineFamilies = (
   context: ReportRenderContext,
   profile: PublicPropagandaProfile,
+  focus: PublicClaimFocus = 'generic',
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -782,6 +900,58 @@ const buildHistoricalStandardSubheadlineFamilies = (
           '各隊沈着機敏ナル行動ヲ示シ課目達成ニ資ス',
           '協同行動緊密ニシテ演習成果良好ナリ',
           '訓練目的ヲ了シ部隊練度ノ充実ヲ示ス',
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'carrier_air_loss') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-subheadline-carrier-focus',
+        variants: [
+          '敵母艦群損失ニ伴ヒ、敵航空戦力亦大損害ヲ受ケタリ',
+          '敵航空兵力亦同時ニ大損害ヲ受ケタリ',
+          '敵航空企図ヲ挫折セシメ所定成果ヲ収メタリ',
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'transport') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-subheadline-transport-focus',
+        variants: [
+          '敵輸送企図ヲ挫折セシメタリ',
+          '敵上陸企図ヲ阻止セリ',
+          '敵輸送作戦ヲ妨止シ所定成果ヲ収メタリ',
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'anti_air_numeric' || focus === 'air_power') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-subheadline-air-focus',
+        variants: [
+          '敵航空攻勢ヲ挫折セシメ所定成果ヲ収メタリ',
+          '敵航空兵力ニ有効打撃ヲ與ヘタリ',
+          '敵航空企図ヲ覆シ我軍主導ヲ確保セリ',
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'main_force') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-subheadline-main-force-focus',
+        variants: [
+          '敵主力部隊ニ有効打撃ヲ與ヘタリ',
+          '敵主力企図ヲ挫折セシメタリ',
+          '敵主力ノ行動ヲ牽制シ成果顕著ナリ',
         ],
       },
     ])
@@ -835,6 +1005,7 @@ const buildPublicInitiativeFamilies = (
   context: ReportRenderContext,
   style: Extract<WarReportStyle, 'standard_bulletin' | 'short_bulletin'>,
   profile: PublicPropagandaProfile,
+  highGlory = false,
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -854,6 +1025,43 @@ const buildPublicInitiativeFamilies = (
                 `帝国海軍演習部隊ハ、${context.practiceOpponent ?? '対抗部隊'}ヲ相手ニ演習行動ヲ開始セリ。`,
                 '帝国海軍演習部隊ハ、所定訓練課目ヲ沈着敢行セリ。',
               ],
+      },
+    ])
+  }
+
+  if (style === 'short_bulletin' && highGlory) {
+    return uniqueFamilies<TextFamily>([
+      context.enemyCategory === 'air_power' && {
+        id: 'short-initiative-air-high-glory',
+        variants: [
+          '敵航空攻勢ヲ潰滅セシメタリ。',
+          '敵航空兵力ヲ撃滅セリ。',
+          '赫々タル防空戦果ヲ収メタリ。',
+        ],
+      },
+      context.enemyCategory === 'transport_group' && {
+        id: 'short-initiative-transport-high-glory',
+        variants: [
+          '敵輸送企図ヲ粉砕セリ。',
+          '敵上陸企図ヲ阻止セリ。',
+          '敵輸送作戦ヲ挫折セシメタリ。',
+        ],
+      },
+      context.enemyCategory === 'main_force' && {
+        id: 'short-initiative-main-force-high-glory',
+        variants: [
+          '敵主力ニ大打撃ヲ与ヘタリ。',
+          '赫々タル戦果ヲ収メタリ。',
+          '敵主力圧倒、戦果顕著。',
+        ],
+      },
+      {
+        id: 'short-initiative-general-high-glory',
+        variants: [
+          '敵部隊ニ大打撃ヲ与ヘタリ。',
+          '赫々タル戦果ヲ収メタリ。',
+          '敵企図空シク潰ユ。',
+        ],
       },
     ])
   }
@@ -949,6 +1157,21 @@ const buildPublicDamageClaimFamilies = (
   }
 
   return uniqueFamilies<TextFamily>([
+    context.enemyCategory === 'transport_group' && {
+      id: `${style}-damage-claim-transport`,
+      variants:
+        style === 'short_bulletin'
+          ? [
+              '敵輸送企図ヲ粉砕セシメタリ。',
+              '敵上陸企図ヲ阻止セリ。',
+              '敵輸送作戦ヲ挫折セシメタリ。',
+            ]
+          : [
+              '敵輸送企図ヲ挫折セシメタリ。',
+              '敵輸送作戦ヲ阻止セリ。',
+              '敵上陸企図ヲ妨止セリ。',
+            ],
+    },
     profile.enemyDamageClaim === 'enemy_air_crushed' && {
       id: `${style}-damage-claim-air`,
       variants:
@@ -1517,6 +1740,8 @@ const buildStandardClosingFamilies = (
 const buildShortHeadlineFamilies = (
   context: ReportRenderContext,
   profile: PublicPropagandaProfile,
+  highGlory: boolean,
+  focus: PublicClaimFocus = 'generic',
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -1526,6 +1751,95 @@ const buildShortHeadlineFamilies = (
           '演習部隊、対抗演習ヲ完遂',
           '演習部隊、優勢裡ニ課目終了',
           '対抗演習、部隊統制良好',
+        ],
+      },
+    ])
+  }
+
+  if (highGlory) {
+    if (focus === 'carrier_air_loss') {
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-headline-carrier-high-glory',
+          variants: [
+            `${context.operationPhrase}方面、敵航空兵力壊滅`,
+            `${context.operationPhrase}方面交戦、敵母艦群沈黙`,
+            `${context.operationPhrase}方面戦況、敵艦載機海没`,
+          ],
+        },
+      ])
+    }
+
+    if (focus === 'transport') {
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-headline-transport-high-glory-focused',
+          variants: [
+            `${context.operationPhrase}方面、敵輸送企図ヲ粉砕`,
+            `${context.operationPhrase}方面交戦、敵輸送作戦ヲ破砕`,
+            `${context.operationPhrase}方面戦況、上陸企図潰ユ`,
+          ],
+        },
+      ])
+    }
+
+    if (focus === 'anti_air_numeric' || focus === 'air_power') {
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-headline-air-high-glory-focused',
+          variants: [
+            `${context.operationPhrase}方面、敵航空攻勢ヲ粉砕`,
+            `${context.operationPhrase}方面交戦、敵航空兵力ヲ覆滅`,
+            `${context.operationPhrase}方面戦況、敵機群壊滅`,
+          ],
+        },
+      ])
+    }
+
+    if (focus === 'main_force') {
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-headline-main-force-high-glory-focused',
+          variants: [
+            `${context.operationPhrase}方面交戦、赫々タル戦果ヲ収ム`,
+            `${context.operationPhrase}方面、敵主力圧倒`,
+            `${context.operationPhrase}方面戦況、敵主力挫折`,
+          ],
+        },
+      ])
+    }
+
+    return uniqueFamilies<TextFamily>([
+      context.enemyCategory === 'air_power' && {
+        id: 'short-headline-air-high-glory',
+        variants: [
+          `${context.operationPhrase}方面、敵航空攻勢ヲ粉砕`,
+          `${context.operationPhrase}方面交戦、敵航空兵力ヲ覆滅`,
+          `${context.operationPhrase}方面戦況、敵機群壊滅`,
+        ],
+      },
+      context.enemyCategory === 'transport_group' && {
+        id: 'short-headline-transport-high-glory',
+        variants: [
+          `${context.operationPhrase}方面、敵輸送企図ヲ粉砕`,
+          `${context.operationPhrase}方面交戦、敵輸送作戦ヲ破砕`,
+          `${context.operationPhrase}方面戦況、上陸企図潰ユ`,
+        ],
+      },
+      context.enemyCategory === 'main_force' && {
+        id: 'short-headline-main-force-high-glory',
+        variants: [
+          `${context.operationPhrase}方面交戦、赫々タル戦果ヲ収ム`,
+          `${context.operationPhrase}方面、敵主力圧倒`,
+          `${context.operationPhrase}方面戦況、敵主力挫折`,
+        ],
+      },
+      {
+        id: 'short-headline-general-high-glory',
+        variants: [
+          `${context.operationPhrase}方面交戦、赫々タル戦果ヲ収ム`,
+          `${context.operationPhrase}方面、敵企図ヲ粉砕`,
+          `${context.operationPhrase}方面戦況、戦果顕著`,
         ],
       },
     ])
@@ -1586,6 +1900,153 @@ const buildShortHeadlineFamilies = (
       ],
     },
   ])
+}
+
+const buildHighGloryShortPrimaryFamilies = (
+  context: ReportRenderContext,
+  focus: PublicClaimFocus,
+) => {
+  switch (focus) {
+    case 'carrier_air_loss':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-primary-carrier-air-loss',
+          variants: [
+            '敵航空兵力壊滅、母艦群既ニ沈黙。',
+            '敵母艦群沈黙、戦果顕著。',
+            '敵航空戦力潰滅、赫々タル戦果ヲ収ム。',
+          ],
+        },
+      ])
+    case 'transport':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-primary-transport',
+          variants: [
+            '敵輸送企図ヲ粉砕セリ。',
+            '敵上陸企図ヲ阻止セリ。',
+            '敵輸送作戦ヲ挫折セシメタリ。',
+          ],
+        },
+      ])
+    case 'anti_air_numeric':
+    case 'air_power':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-primary-air-power',
+          variants: [
+            '敵航空攻勢ヲ潰滅セシメタリ。',
+            '敵航空兵力ヲ撃滅セリ。',
+            '赫々タル防空戦果ヲ収メタリ。',
+          ],
+        },
+      ])
+    case 'main_force':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-primary-main-force',
+          variants: [
+            '敵主力ニ大打撃ヲ与ヘタリ。',
+            '赫々タル戦果ヲ収メタリ。',
+            '敵主力圧倒、戦果顕著。',
+          ],
+        },
+      ])
+    case 'generic':
+    default:
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-primary-generic',
+          variants: [
+            '敵部隊ニ大打撃ヲ与ヘタリ。',
+            '赫々タル戦果ヲ収メタリ。',
+            '敵企図空シク潰ユ。',
+          ],
+        },
+      ])
+  }
+}
+
+const buildHighGloryShortSecondaryFamilies = (
+  _context: ReportRenderContext,
+  focus: PublicClaimFocus,
+) => {
+  switch (focus) {
+    case 'carrier_air_loss':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-secondary-carrier-air-loss',
+          variants: [
+            '敵主力挫折、戦機我ニ帰ス。',
+            '敵企図ヲ粉砕セシメタリ。',
+            '赫々タル戦果、戦局ニ資ス。',
+          ],
+        },
+      ])
+    case 'transport':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-secondary-transport',
+          variants: [
+            '敵主力挫折、上陸企図空シク潰ユ。',
+            '敵部隊ニ大打撃ヲ与ヘタリ。',
+            '戦果顕著、敵企図ヲ粉砕セシメタリ。',
+          ],
+        },
+      ])
+    case 'anti_air_numeric':
+    case 'air_power':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-secondary-air-power',
+          variants: [
+            '敵主力挫折、戦果顕著。',
+            '敵企図ヲ粉砕セシメタリ。',
+            '敵部隊ニ大打撃ヲ与ヘタリ。',
+          ],
+        },
+      ])
+    case 'main_force':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-secondary-main-force',
+          variants: [
+            '敵企図ヲ粉砕セシメタリ。',
+            '敵主力挫折、戦果顕著。',
+            '殲滅的打撃ヲ與ヘタリ。',
+          ],
+        },
+      ])
+    case 'generic':
+    default:
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-secondary-generic',
+          variants: [
+            '敵企図ヲ粉砕セシメタリ。',
+            '敵部隊ニ大打撃ヲ加ヘタリ。',
+            '戦果顕著ナリ。',
+          ],
+        },
+      ])
+    }
+}
+
+const selectHighGloryShortThirdBullet = (
+  focus: PublicClaimFocus,
+  carrierAirLossBullet: string,
+  antiAirBullet: string,
+  closingBullet: string,
+) => {
+  if (focus !== 'carrier_air_loss' && carrierAirLossBullet) {
+    return carrierAirLossBullet
+  }
+
+  if (antiAirBullet) {
+    return antiAirBullet
+  }
+
+  return closingBullet
 }
 
 const buildShortOpeningFamilies = (
@@ -1735,7 +2196,7 @@ const parseNodeNumber = (battle: BattleNodeCapture) => {
 
 const buildFormalNodeLabel = (battle: BattleNodeCapture, index: number) => {
   const nodeNumber = parseNodeNumber(battle) ?? index + 1
-  return `【第${toSimpleKanji(nodeNumber)}交戦点】`
+  return `【第${toFormalKansuji(nodeNumber)}交戦点】`
 }
 
 const buildFormalMissionOverviewFamilies = (context: ReportRenderContext) => {
@@ -2143,7 +2604,7 @@ const buildFormalSortieBody = (
     `　${context.friendlySummary}。旗艦「${context.flagshipDisplay ?? '不詳'}」。`,
     '三、敵情。',
     `　${enemySummaryLabel}　${buildEncounterObject(context)}。`,
-    `　交戦点数　${toSimpleKanji(Math.max(context.nodeCount, 1))}。`,
+    `　交戦点数　${toFormalKansuji(Math.max(context.nodeCount, 1))}。`,
     '四、戦闘経過。',
   ]
 
@@ -2182,6 +2643,7 @@ const buildStandardBulletin = (
   const tags = extractNarrativeTags(context)
   const mainNarrative = selectMainNarrative(context, tags, fingerprint)
   const propagandaProfile = buildPublicPropagandaProfile(context, 'standard_bulletin', fingerprint)
+  const claimFocus = selectPublicClaimFocus(context, options.truthSource ?? null)
   const recentSelections = getRecentSelections(options, 'standard_bulletin')
   const slotFamilies: Record<string, string> = {}
 
@@ -2189,7 +2651,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'headline',
-    buildHistoricalStandardHeadlineFamilies(context, propagandaProfile),
+    buildHistoricalStandardHeadlineFamilies(context, propagandaProfile, claimFocus),
     recentSelections,
     slotFamilies,
   )
@@ -2197,7 +2659,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'subheadline',
-    buildHistoricalStandardSubheadlineFamilies(context, propagandaProfile),
+    buildHistoricalStandardSubheadlineFamilies(context, propagandaProfile, claimFocus),
     recentSelections,
     slotFamilies,
   )
@@ -2325,6 +2787,8 @@ const buildShortBulletin = (
   const tags = extractNarrativeTags(context)
   const mainNarrative = selectMainNarrative(context, tags, fingerprint)
   const propagandaProfile = buildPublicPropagandaProfile(context, 'short_bulletin', fingerprint)
+  const highGloryShortMode = shouldUseHighGloryShortMode(context, options.truthSource ?? null)
+  const claimFocus = selectPublicClaimFocus(context, options.truthSource ?? null)
   const recentSelections = getRecentSelections(options, 'short_bulletin')
   const slotFamilies: Record<string, string> = {}
 
@@ -2332,7 +2796,7 @@ const buildShortBulletin = (
     fingerprint,
     'short_bulletin',
     'headline',
-    buildShortHeadlineFamilies(context, propagandaProfile),
+    buildShortHeadlineFamilies(context, propagandaProfile, highGloryShortMode, claimFocus),
     recentSelections,
     slotFamilies,
   )
@@ -2340,7 +2804,12 @@ const buildShortBulletin = (
     fingerprint,
     'short_bulletin',
     'initiative',
-    buildPublicInitiativeFamilies(context, 'short_bulletin', propagandaProfile),
+    buildPublicInitiativeFamilies(
+      context,
+      'short_bulletin',
+      propagandaProfile,
+      highGloryShortMode,
+    ),
     recentSelections,
     slotFamilies,
   )
@@ -2378,45 +2847,98 @@ const buildShortBulletin = (
 
   const priorityThirdBullet = carrierAirLossBullet || antiAirBullet
 
-  const bulletinLines = priorityThirdBullet
-    ? [
-        pickVariant(
-          fingerprint,
-          `short_bulletin:initiative:${openingFamily?.id ?? 'fallback'}`,
-          openingFamily?.variants ?? ['我軍、攻撃ヲ開始セリ。'],
-        ),
-        pickVariant(
-          fingerprint,
-          `short_bulletin:damageClaim:${damageClaimFamily?.id ?? 'fallback'}`,
-          damageClaimFamily?.variants ?? ['敵企図ヲ挫折セシメタリ。'],
-        ),
-        priorityThirdBullet,
-      ]
-    : [
-    pickVariant(
+  let bulletinLines: string[]
+
+  if (highGloryShortMode) {
+    const primaryFamily = selectFamily(
       fingerprint,
-      `short_bulletin:initiative:${openingFamily?.id ?? 'fallback'}`,
-      openingFamily?.variants ?? ['我軍、攻撃ヲ開始セリ。'],
-    ),
-    pickVariant(
+      'short_bulletin',
+      'primaryClaim',
+      buildHighGloryShortPrimaryFamilies(context, claimFocus),
+      recentSelections,
+      slotFamilies,
+    )
+    const secondaryFamily = selectFamily(
       fingerprint,
-      `short_bulletin:damageClaim:${damageClaimFamily?.id ?? 'fallback'}`,
-      damageClaimFamily?.variants ?? ['敵企図ヲ挫折セシメタリ。'],
-    ),
-    (context.kind === 'practice' ||
-    mixSeed(fingerprint, 'short_bulletin:include-continuity') % 4 === 0)
-      ? pickVariant(
-          fingerprint,
-          `short_bulletin:concealment:${concealmentFamily?.id ?? 'fallback'}`,
-          concealmentFamily?.variants ?? ['我軍態勢整然ナリ。'],
-        )
-      : '',
-    pickVariant(
+      'short_bulletin',
+      'secondaryClaim',
+      buildHighGloryShortSecondaryFamilies(context, claimFocus),
+      recentSelections,
+      slotFamilies,
+    )
+    const closingBullet = pickVariant(
       fingerprint,
       `short_bulletin:closing:${closingFamily?.id ?? 'fallback'}`,
-      closingFamily?.variants ?? ['戦果顕著ナリ。'],
-    ),
-      ].filter(Boolean)
+      closingFamily?.variants ?? ['右、発表ス。'],
+    )
+    const primaryBullet =
+      claimFocus === 'carrier_air_loss' && carrierAirLossBullet
+        ? carrierAirLossBullet
+        : pickVariant(
+            fingerprint,
+            `short_bulletin:primaryClaim:${primaryFamily?.id ?? 'fallback'}`,
+            primaryFamily?.variants ?? ['敵部隊ニ大打撃ヲ与ヘタリ。'],
+          )
+    const thirdBullet =
+      claimFocus === 'carrier_air_loss'
+        ? closingBullet
+        : selectHighGloryShortThirdBullet(
+            claimFocus,
+            carrierAirLossBullet,
+            antiAirBullet,
+            closingBullet,
+          )
+
+    bulletinLines = [
+      primaryBullet,
+      pickVariant(
+        fingerprint,
+        `short_bulletin:secondaryClaim:${secondaryFamily?.id ?? 'fallback'}`,
+        secondaryFamily?.variants ?? ['敵企図ヲ粉砕セシメタリ。'],
+      ),
+      thirdBullet,
+    ].filter(Boolean)
+  } else {
+    bulletinLines = priorityThirdBullet
+      ? [
+          pickVariant(
+            fingerprint,
+            `short_bulletin:initiative:${openingFamily?.id ?? 'fallback'}`,
+            openingFamily?.variants ?? ['我軍、攻撃ヲ開始セリ。'],
+          ),
+          pickVariant(
+            fingerprint,
+            `short_bulletin:damageClaim:${damageClaimFamily?.id ?? 'fallback'}`,
+            damageClaimFamily?.variants ?? ['敵企図ヲ挫折セシメタリ。'],
+          ),
+          priorityThirdBullet,
+        ]
+      : [
+          pickVariant(
+            fingerprint,
+            `short_bulletin:initiative:${openingFamily?.id ?? 'fallback'}`,
+            openingFamily?.variants ?? ['我軍、攻撃ヲ開始セリ。'],
+          ),
+          pickVariant(
+            fingerprint,
+            `short_bulletin:damageClaim:${damageClaimFamily?.id ?? 'fallback'}`,
+            damageClaimFamily?.variants ?? ['敵企図ヲ挫折セシメタリ。'],
+          ),
+          (context.kind === 'practice' ||
+          mixSeed(fingerprint, 'short_bulletin:include-continuity') % 4 === 0)
+            ? pickVariant(
+                fingerprint,
+                `short_bulletin:concealment:${concealmentFamily?.id ?? 'fallback'}`,
+                concealmentFamily?.variants ?? ['我軍態勢整然ナリ。'],
+              )
+            : '',
+          pickVariant(
+            fingerprint,
+            `short_bulletin:closing:${closingFamily?.id ?? 'fallback'}`,
+            closingFamily?.variants ?? ['戦果顕著ナリ。'],
+          ),
+        ].filter(Boolean)
+  }
 
   return {
     bulletin: [

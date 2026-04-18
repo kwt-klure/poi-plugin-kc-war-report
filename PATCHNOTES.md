@@ -1,5 +1,51 @@
 # Patch Notes
 
+## 0.4.13
+
+This release does not add a new truth line.
+It retunes how existing public claims are promoted into the visible slots of `標準公報` and `短報`.
+
+The practical goal is simple:
+
+- `標準公報` should stop falling back to generic underblown copy when stronger materials already exist
+- `短報` should stop reading like a compressed `標準公報`
+- high-glory sorties should now sound more like shameless bulletin dispatches than polite summaries
+
+この release では新しい truth line を増やしていません。
+既存の public claim を、`標準公報` と `短報` のどの句位へ上げるかを調整した patch です。
+
+狙いは単純です。
+
+- `標準公報` が、既に強い材料を持つ sortie でも generic な薄い文面へ戻らないこと
+- `短報` が、`標準公報` の圧縮版に見えないこと
+- high-glory sortie では、礼儀正しい summary ではなく shameless な bulletin dispatch に見えること
+
+### Changed
+
+- `標準公報`
+  - strongest available claim is now promoted into headline / lead more consistently
+  - carrier / transport / anti-air heavy materials no longer default back to generic main-force copy
+- `短報`
+  - high-glory mode now chooses a single narrative focus first, then builds result-first bullets around it
+  - front bullets no longer fall back to weak process wording in strong sorties
+  - numeric anti-air or carrier-air-loss hooks are promoted into more visible slots when present
+- `README`
+  - added a short product note explaining why claim precedence matters
+  - updated the source-install tarball example to `0.4.13`
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand src/__tests__/report.spec.ts
+npm test -- --runInBand
+npm run typeCheck
+git diff --check
+```
+
+All checks passed in this workspace.
+
 ## 0.4.12
 
 This workspace adds a second aviation-facing truth-event line:

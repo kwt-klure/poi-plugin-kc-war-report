@@ -502,6 +502,132 @@ describe('war report sortie architecture', () => {
     }
   })
 
+  it('escalates high-glory short bulletins into result-first numeric dispatches', () => {
+    const highGlorySortie: SortieSessionCapture = {
+      ...antiAirSortieSession,
+      id: 'sortie-short-high-glory',
+      operationLabelRaw: 'カレー洋海域',
+      operationPhraseRaw: 'カレー洋海域',
+      battles: [
+        {
+          ...antiAirBattle,
+          operationLabelRaw: 'カレー洋海域',
+          operationPhraseRaw: 'カレー洋海域',
+          enemyDeckNameRaw: '敵主力打撃群',
+          enemyShipNamesRaw: ['戦艦ル級', '空母ヲ級', '輸送ワ級', '駆逐ハ級後期型'],
+        },
+      ],
+    }
+    const record = normalizeSortieSession(highGlorySortie, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: highGlorySortie,
+    }
+
+    const short = buildWarReportFromRecord(record, 'short_bulletin', {
+      truthSource,
+      variantSeed: 2,
+    })
+
+    expect(short.body).toContain('三、')
+    expect(short.body).not.toMatch(/攻撃ヲ開始セリ|攻撃ヲ継続セリ/)
+    expect(short.body).toMatch(/赫々タル戦果|大打撃|圧倒|粉砕|潰滅|壊滅|撃滅/)
+    expect(short.body).toMatch(/百余機|二百余機|三百余機|五百余機|七百余機/)
+  })
+
+  it('promotes carrier and air-power claims into standard bulletin headline slots instead of generic main-force copy', () => {
+    const highGlorySortie: SortieSessionCapture = {
+      ...antiAirSortieSession,
+      id: 'sortie-standard-claim-promotion',
+      operationLabelRaw: 'カレー洋海域',
+      operationPhraseRaw: 'カレー洋海域',
+      battles: [
+        {
+          ...antiAirBattle,
+          operationLabelRaw: 'カレー洋海域',
+          operationPhraseRaw: 'カレー洋海域',
+          enemyDeckNameRaw: '敵強襲上陸主力艦隊',
+          enemyShipNamesRaw: ['戦艦タ級', '空母ヲ級', '輸送ワ級', '駆逐ハ級後期型'],
+        },
+      ],
+    }
+    const record = normalizeSortieSession(highGlorySortie, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: highGlorySortie,
+    }
+
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', {
+      truthSource,
+      variantSeed: 2,
+    })
+
+    expect(standard.bulletin).toMatch(/航空戦力|母艦群|航空企図/)
+    expect(standard.bulletin).not.toContain('敵主力部隊ニ有効打撃ヲ與ヘタリ')
+    expect(standard.body).toMatch(/敵艦載機二百余機|敵航空攻勢ハ主戦闘前既ニ挫折セリ|敵機百四十余機ヲ撃滅セリ/)
+  })
+
+  it('keeps high-glory main-force short bulletins result-first even without numeric side events', () => {
+    const mainForceRecord = normalizeSortieSession(
+      {
+        ...sortieSession,
+        id: 'sortie-main-force-high-glory-slotting',
+        operationLabelRaw: '沖ノ島沖',
+        operationPhraseRaw: '沖ノ島沖',
+        battles: [
+          {
+            ...nodeBattle,
+            operationLabelRaw: '沖ノ島沖',
+            operationPhraseRaw: '沖ノ島沖',
+            enemyDeckNameRaw: '敵侵攻中核艦隊',
+            enemyShipNamesRaw: ['戦艦ル級', '戦艦ル級', '軽巡ヘ級'],
+            sawAirAttack: false,
+          },
+        ],
+      },
+      'completed',
+    )
+
+    const short = buildWarReportFromRecord(mainForceRecord, 'short_bulletin', {
+      variantSeed: 3,
+    })
+    const bullets = short.body.split('\n').filter((line) => /^(一|二|三)、/.test(line))
+
+    expect(bullets).toHaveLength(3)
+    expect(bullets[0]).not.toMatch(/攻撃ヲ開始セリ|攻撃ヲ継続セリ/)
+    expect(bullets[1]).not.toMatch(/攻撃ヲ開始セリ|攻撃ヲ継続セリ/)
+    expect(bullets[0]).toMatch(/大打撃|赫々タル戦果|主力圧倒|戦果顕著/)
+    expect(bullets[1]).toMatch(/粉砕|挫折|戦果顕著|殲滅的打撃/)
+  })
+
+  it('renders formal node labels with kansuji even above ten', () => {
+    const twentyNodeSortie: SortieSessionCapture = {
+      ...sortieSession,
+      id: 'sortie-node-20',
+      battles: [
+        {
+          ...nodeBattle,
+          nodeLabel: 'Node 20',
+        },
+      ],
+    }
+
+    const formal = buildWarReportFromRecord(
+      normalizeSortieSession(twentyNodeSortie, 'completed'),
+      'formal_after_action',
+      {
+        truthSource: {
+          kind: 'sortie',
+          sortie: twentyNodeSortie,
+        },
+        addressSnapshot: formalAddressSnapshot,
+      },
+    )
+
+    expect(formal.body).toContain('【第二十交戦点】')
+    expect(formal.body).not.toContain('【第20交戦点】')
+  })
+
   it('does not add anti-air credit lines when no anti-air summary exists', () => {
     const record = normalizeSortieSession(sortieSession, 'completed')
     const truthSource = {
@@ -701,7 +827,7 @@ describe('war report sortie architecture', () => {
 
     expect(`${standard.bulletin}\n${standard.body}`).not.toContain('甚大ナル圧力')
     expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/壊滅的|赫々タル戦果/)
-    expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|圧倒|赫々タル戦果|大打撃/)
+    expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|圧倒|赫々タル戦果|大打撃|潰ユ|撃滅|潰滅/)
   })
 
   it('keeps standard bulletin lead and result paragraphs semantically distinct', () => {
