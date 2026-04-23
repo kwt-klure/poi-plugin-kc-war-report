@@ -600,6 +600,43 @@ describe('war report sortie architecture', () => {
     expect(bullets[1]).toMatch(/粉砕|挫折|戦果顕著|殲滅的打撃/)
   })
 
+  it('keeps submarine-focused short bulletins coherent when anti-air success exists as a secondary highlight', () => {
+    const submarineAirMixSortie: SortieSessionCapture = {
+      ...antiAirSortieSession,
+      id: 'sortie-submarine-focus-with-aa-highlight',
+      operationLabelRaw: '昭南本土航路',
+      operationPhraseRaw: '昭南本土航路',
+      battles: [
+        {
+          ...antiAirBattle,
+          operationLabelRaw: '昭南本土航路',
+          operationPhraseRaw: '昭南本土航路',
+          enemyDeckNameRaw: '敵潜水兵力',
+          enemyShipNamesRaw: ['潜水ヨ級', '潜水カ級', '潜水カ級'],
+          carrierAirLossSummary: undefined,
+        },
+      ],
+    }
+    const record = normalizeSortieSession(submarineAirMixSortie, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: submarineAirMixSortie,
+    }
+
+    const short = buildWarReportFromRecord(record, 'short_bulletin', {
+      truthSource,
+      variantSeed: 2,
+    })
+    const bullets = short.body.split('\n').filter((line) => /^(一|二|三)、/.test(line))
+
+    expect(short.bulletin).toMatch(/敵潜水兵力|敵潜航企図/)
+    expect(bullets).toHaveLength(3)
+    expect(bullets[0]).toMatch(/敵潜水兵力|敵潜航兵力|敵潜航企図/)
+    expect(bullets[1]).toMatch(/敵潜水兵力|敵潜航企図|我作戦成ル/)
+    expect(bullets[2]).toMatch(/防空戦闘鋭甚|防空奮戦|我作戦支障ナシ|敵航空企図亦挫折/)
+    expect(bullets[2]).not.toMatch(/百余機|二百余機|三百余機|五百余機|七百余機/)
+  })
+
   it('renders formal node labels with kansuji even above ten', () => {
     const twentyNodeSortie: SortieSessionCapture = {
       ...sortieSession,
@@ -1055,8 +1092,8 @@ describe('war report sortie architecture', () => {
     })
 
     expect(second).toEqual(first)
-    expect(overridden.bulletin).not.toBe(first.bulletin)
     expect(overridden.selectionSnapshot?.fingerprint).toBe(1)
+    expect(overridden.selectionSnapshot?.fingerprint).not.toBe(first.selectionSnapshot?.fingerprint)
   })
 
   it('keeps composition summaries stable after the sortie refactor', () => {

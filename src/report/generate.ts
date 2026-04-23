@@ -64,6 +64,7 @@ type PublicPropagandaProfile = {
 type PublicClaimFocus =
   | 'carrier_air_loss'
   | 'transport'
+  | 'submarine_force'
   | 'anti_air_numeric'
   | 'air_power'
   | 'main_force'
@@ -377,8 +378,8 @@ const selectPublicClaimFocus = (
     return 'transport'
   }
 
-  if ((antiAirAggregate?.truthLoss ?? 0) >= 20) {
-    return 'anti_air_numeric'
+  if (context.enemyCategory === 'submarine_force') {
+    return 'submarine_force'
   }
 
   if (context.enemyCategory === 'air_power') {
@@ -387,6 +388,10 @@ const selectPublicClaimFocus = (
 
   if (context.enemyCategory === 'main_force') {
     return 'main_force'
+  }
+
+  if ((antiAirAggregate?.truthLoss ?? 0) >= 20) {
+    return 'anti_air_numeric'
   }
 
   return 'generic'
@@ -489,6 +494,28 @@ const buildShortAntiAirBullet = (truthSource: WarReportTruthSource | null) => {
   }
 
   return '防空成功、敵航空兵力著減。'
+}
+
+const buildShortAntiAirSupportBullet = (
+  truthSource: WarReportTruthSource | null,
+  context: ReportRenderContext,
+) => {
+  const aggregate = buildSortieAntiAirAggregate(truthSource)
+  if (!aggregate?.triggered) {
+    return ''
+  }
+
+  if (aggregate.shipName) {
+    if (context.enemyCategory === 'submarine_force') {
+      return `「${aggregate.shipName}」防空戦闘鋭甚、我作戦支障ナシ。`
+    }
+
+    return `「${aggregate.shipName}」防空奮戦、敵航空企図亦挫折セリ。`
+  }
+
+  return context.enemyCategory === 'submarine_force'
+    ? '防空戦闘鋭甚、我作戦支障ナシ。'
+    : '防空成功、敵航空企図亦挫折セリ。'
 }
 
 const buildShortCarrierAirLossBullet = (
@@ -809,6 +836,19 @@ const buildHistoricalStandardHeadlineFamilies = (
     ])
   }
 
+  if (focus === 'submarine_force') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-headline-submarine-focus',
+        variants: [
+          `${context.operationPhrase}方面作戦、敵潜水兵力ヲ撃摧`,
+          `${context.operationPhrase}方面交戦、敵潜航企図ヲ挫折`,
+          `${context.operationPhrase}方面作戦、敵潜水兵力ニ戦果顕著`,
+        ],
+      },
+    ])
+  }
+
   if (focus === 'anti_air_numeric' || focus === 'air_power') {
     return uniqueFamilies<TextFamily>([
       {
@@ -926,6 +966,19 @@ const buildHistoricalStandardSubheadlineFamilies = (
           '敵輸送企図ヲ挫折セシメタリ',
           '敵上陸企図ヲ阻止セリ',
           '敵輸送作戦ヲ妨止シ所定成果ヲ収メタリ',
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'submarine_force') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-subheadline-submarine-focus',
+        variants: [
+          '敵潜航企図ヲ挫折セシメタリ',
+          '敵潜水兵力ニ有効打撃ヲ與ヘタリ',
+          '敵潜水兵力ヲ制シ所定成果ヲ収メタリ',
         ],
       },
     ])
@@ -1783,6 +1836,19 @@ const buildShortHeadlineFamilies = (
       ])
     }
 
+    if (focus === 'submarine_force') {
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-headline-submarine-high-glory-focused',
+          variants: [
+            `${context.operationPhrase}方面作戦、敵潜水兵力ヲ撃摧`,
+            `${context.operationPhrase}方面交戦、敵潜航企図ヲ粉砕`,
+            `${context.operationPhrase}方面戦況、敵潜水兵力潰ユ`,
+          ],
+        },
+      ])
+    }
+
     if (focus === 'anti_air_numeric' || focus === 'air_power') {
       return uniqueFamilies<TextFamily>([
         {
@@ -1929,6 +1995,17 @@ const buildHighGloryShortPrimaryFamilies = (
           ],
         },
       ])
+    case 'submarine_force':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-primary-submarine',
+          variants: [
+            '敵潜水兵力ニ大ナル戦果ヲ収メタリ。',
+            '敵潜水兵力ヲ撃摧セリ。',
+            '敵潜航兵力ニ壊滅的打撃ヲ与ヘタリ。',
+          ],
+        },
+      ])
     case 'anti_air_numeric':
     case 'air_power':
       return uniqueFamilies<TextFamily>([
@@ -1994,6 +2071,17 @@ const buildHighGloryShortSecondaryFamilies = (
           ],
         },
       ])
+    case 'submarine_force':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-secondary-submarine',
+          variants: [
+            '敵潜航企図ヲ粉砕セシメタリ。',
+            '敵潜航企図空シク潰ユ。',
+            '敵潜水兵力挫折、我作戦成ル。',
+          ],
+        },
+      ])
     case 'anti_air_numeric':
     case 'air_power':
       return uniqueFamilies<TextFamily>([
@@ -2036,13 +2124,20 @@ const selectHighGloryShortThirdBullet = (
   focus: PublicClaimFocus,
   carrierAirLossBullet: string,
   antiAirBullet: string,
+  antiAirSupportBullet: string,
   closingBullet: string,
 ) => {
   if (focus !== 'carrier_air_loss' && carrierAirLossBullet) {
     return carrierAirLossBullet
   }
 
-  if (antiAirBullet) {
+  if (focus === 'anti_air_numeric' || focus === 'air_power') {
+    if (antiAirBullet) {
+      return antiAirBullet
+    }
+  } else if (antiAirSupportBullet) {
+    return antiAirSupportBullet
+  } else if (antiAirBullet) {
     return antiAirBullet
   }
 
@@ -2840,6 +2935,10 @@ const buildShortBulletin = (
 
   const antiAirBullet =
     context.kind === 'sortie' ? buildShortAntiAirBullet(options.truthSource ?? null) : ''
+  const antiAirSupportBullet =
+    context.kind === 'sortie'
+      ? buildShortAntiAirSupportBullet(options.truthSource ?? null, context)
+      : ''
   const carrierAirLossBullet =
     context.kind === 'sortie'
       ? buildShortCarrierAirLossBullet(options.truthSource ?? null, fingerprint)
@@ -2886,6 +2985,7 @@ const buildShortBulletin = (
             claimFocus,
             carrierAirLossBullet,
             antiAirBullet,
+            antiAirSupportBullet,
             closingBullet,
           )
 
