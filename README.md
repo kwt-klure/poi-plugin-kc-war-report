@@ -95,6 +95,8 @@ This plugin now tries to give at least a small place back to that kind of work:
 - `硬派詳報` can record defensive anti-air credit in a dry, internal-report register
 - `標準公報` and `短報` can then turn the same event into shameless headquarters-style enemy-aircraft claims
 - if enemy carriers are ruined, the documents can also treat their embarked aircraft as having gone down with them
+- formal findings can recognize a high anti-air contribution as the distinguished ship instead of merely repeating the visible MVP
+- if the enemy flagship is confirmed sunk, all three voices can mention it as a special battle claim without assigning the kill to a friendly ship
 
 The point is not to become a battle simulator.
 The point is to let the documents remember that ships doing invisible work still mattered.
@@ -106,6 +108,8 @@ The point is to let the documents remember that ships doing invisible work still
 - `硬派詳報` は、防空戦果のような働きを乾いた内部文書調で記録できる
 - `標準公報` と `短報` は、同じ event を大本営風の敵機撃滅 claim へ書き換えられる
 - 敵空母が重創以上になった場合、その搭載機喪失も三文書へ書き戻せる
+- 高い防空戦果は、表示済み MVP をなぞるだけでなく、詳報の殊勲艦認定にも反映できる
+- 敵旗艦撃沈を確認できた場合は、友軍艦への無理な attribution を避けつつ、三文書で特記できる
 
 狙いは battle simulator 化ではありません。
 見えにくい働きも、文書の側ではきちんと記憶させることです。
@@ -287,6 +291,9 @@ The live line currently captures a conservative, safe fact set:
 - broad enemy classification
 - node trail
 - some safe battle-context signals
+- defensive anti-air event summaries when `api_air_fire` is visible
+- conservative enemy carrier aircraft-loss estimates when carrier damage and master slot data are available
+- confirmed enemy flagship sinking when aligned enemy HP arrays show the first enemy ship at zero HP
 - admiral identity from Poi API when available
 
 It is **not**:
@@ -304,6 +311,9 @@ live line が現在取得するのは、保守的で安全な fact set です。
 - 大分類としての敵情
 - node trail
 - 安全に使える範囲の battle context
+- `api_air_fire` が見える場合の防空戦闘 event summary
+- 敵空母被害と master slot data が揃う場合の艦載機喪失 estimate
+- 敵 HP 配列が揃い、敵一番艦 HP がゼロとなった場合の敵旗艦撃沈確認
 - Poi API から取得可能な提督 identity
 
 これは、
@@ -321,12 +331,14 @@ live line が現在取得するのは、保守的で安全な fact set です。
 - It does not output exact shell / torpedo / shot-down counts that it cannot verify
 - It does not merge `硬派詳報` with propaganda logic
 - It does not fabricate technical detail just for flavor
+- It does not assign enemy flagship sinking to a friendly ship unless attacker attribution exists
 
 - full raw API packet を history に保存しない
 - 完全な battle viewer を目指さない
 - 確認不能な砲弾数 / 魚雷数 / 撃墜数を出さない
 - `硬派詳報` と propaganda logic を混ぜない
 - 史味だけのために技術 detail を捏造しない
+- 攻撃者 attribution がない敵旗艦撃沈を、特定の友軍艦の功績として扱わない
 
 ## Example Output Direction
 
@@ -435,6 +447,10 @@ Current polish work is kept intentionally render-layer-first and corpus-first: s
 　交戦概要　敵部隊ト接触、航空情況下ニ交戦。細目未詳。
 　我方被害　損傷細目後報。
 　防空戦果　「初月」防空射撃ニ当リ、敵機計五十三機ヲ撃墜。
+
+七、所見。
+　部隊行動概ネ適切ナリ。
+　戦闘後判定ニ於テ「初月」防空戦果顕著、殊勲艦ト認定。
 ```
 
 ```text
@@ -493,6 +509,45 @@ Current polish work is kept intentionally render-layer-first and corpus-first: s
 一、我軍、攻撃ヲ開始セリ。
 二、敵主力ニ大打撃ヲ加ヘタリ。
 三、敵艦載機三百余機、母艦諸共喪失。
+```
+
+### `敵旗艦撃沈` を含む出力イメージ
+
+```text
+戦闘詳報
+令和八年四月六日
+於 某海域
+
+四、戦闘経過。
+【第三交戦点】
+　交戦時刻　1026
+　敵情　敵主力部隊。確認艦種 戦艦レ級、軽巡ツ級。
+　交戦結果　敵ニ有効打撃ヲ与ヘ、所定行動ヲ完遂。
+　交戦概要　敵部隊ト接触、水上交戦実施。細目未詳。
+　我方被害　我方損害ナシ。
+　特記戦果　敵旗艦「戦艦レ級」撃沈ヲ確認。
+```
+
+```text
+大本営海軍部発表
+
+令和八年四月六日
+
+某方面作戦、戦果顕著
+
+敵旗艦「戦艦レ級」ヲ撃沈、敵戦列ヲ潰乱セシメタリ。
+```
+
+```text
+大本営海軍部発表
+
+令和八年四月六日
+
+某方面交戦、赫々タル戦果ヲ収ム
+
+一、我軍、攻撃ヲ開始セリ。
+二、敵主力ニ大打撃ヲ加ヘタリ。
+三、敵旗艦撃沈、戦果顕著。
 ```
 
 ### `戦闘参考詳報`
@@ -599,7 +654,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.13.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.14.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update
