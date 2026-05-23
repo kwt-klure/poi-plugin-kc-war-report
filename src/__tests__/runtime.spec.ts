@@ -3,6 +3,7 @@ import {
   __detectAirAttackFromPacketForTests,
   __extractAntiAirSummaryFromPacketForTests,
   __extractCarrierAirLossSummaryFromPacketForTests,
+  __extractEnemyFlagshipSunkSummaryFromPacketForTests,
   __resolveDeckIdForTests,
   refreshFleetSnapshotFromStore,
 } from '../battle/runtime'
@@ -336,5 +337,52 @@ describe('battle runtime fleet refresh', () => {
     })
 
     expect(summary).toBeNull()
+  })
+
+  it('requires a confirmed zero-hp enemy flagship before reporting flagship sunk', () => {
+    const state: PoiState = {
+      ui: {
+        activeMainTab: '',
+      },
+      plugins: [],
+      const: {
+        $ships: {
+          '2101': {
+            api_name: '戦艦レ級',
+            api_stype: 9,
+          },
+        },
+      },
+    }
+
+    importPoiState(state)
+
+    expect(
+      __extractEnemyFlagshipSunkSummaryFromPacketForTests({
+        api_ship_ke: [2101, 1902],
+        api_e_nowhps: [0, 30],
+        api_e_maxhps: [130, 30],
+      }),
+    ).toEqual({
+      triggered: true,
+      enemyShipId: 2101,
+      enemyNameRaw: '戦艦レ級',
+    })
+
+    expect(
+      __extractEnemyFlagshipSunkSummaryFromPacketForTests({
+        api_ship_ke: [2101],
+        api_e_nowhps: [1],
+        api_e_maxhps: [130],
+      }),
+    ).toBeNull()
+
+    expect(
+      __extractEnemyFlagshipSunkSummaryFromPacketForTests({
+        api_ship_ke: [2101],
+        api_e_nowhps: [0],
+        api_e_maxhps: [],
+      }),
+    ).toBeNull()
   })
 })

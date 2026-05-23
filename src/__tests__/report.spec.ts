@@ -502,6 +502,70 @@ describe('war report sortie architecture', () => {
     }
   })
 
+  it('lets high anti-air credit outrank MVP in formal distinguished-ship findings', () => {
+    const airDefenseSortie: SortieSessionCapture = {
+      ...antiAirSortieSession,
+      id: 'sortie-aa-distinguished',
+      battles: [
+        {
+          ...antiAirBattle,
+          mvpNameRaw: '矢矧改二乙',
+        },
+      ],
+    }
+    const record = normalizeSortieSession(airDefenseSortie, 'completed')
+
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: airDefenseSortie,
+      },
+      addressSnapshot: formalAddressSnapshot,
+    })
+
+    expect(formal.body).toContain('戦闘後判定ニ於テ「初月」防空戦果顕著、殊勲艦ト認定。')
+    expect(formal.body).not.toContain('「矢矧」殊勲艦')
+  })
+
+  it('mentions enemy flagship sinking in all document voices without assigning it to a ship', () => {
+    const flagshipSunkBattle = {
+      ...antiAirBattle,
+      enemyFlagshipSunkSummary: {
+        triggered: true,
+        enemyShipId: 2101,
+        enemyNameRaw: '戦艦レ級',
+      },
+    } as BattleNodeCapture
+    const flagshipSunkSortie: SortieSessionCapture = {
+      ...antiAirSortieSession,
+      id: 'sortie-enemy-flagship-sunk',
+      battles: [flagshipSunkBattle],
+    }
+    const record = normalizeSortieSession(flagshipSunkSortie, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: flagshipSunkSortie,
+    }
+
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource,
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', {
+      truthSource,
+    })
+    const short = buildWarReportFromRecord(record, 'short_bulletin', {
+      truthSource,
+    })
+    const allText = `${formal.body}\n${standard.body}\n${short.body}`
+
+    expect(formal.body).toContain('敵旗艦「戦艦レ級」撃沈ヲ確認。')
+    expect(standard.body).toContain('敵旗艦「戦艦レ級」ヲ撃沈、敵戦列ヲ潰乱セシメタリ。')
+    expect(short.body).toContain('敵旗艦撃沈、戦果顕著。')
+    expect(allText).not.toContain('「初月」敵旗艦')
+    expect(allText).not.toContain('「矢矧」敵旗艦')
+  })
+
   it('escalates high-glory short bulletins into result-first numeric dispatches', () => {
     const highGlorySortie: SortieSessionCapture = {
       ...antiAirSortieSession,
