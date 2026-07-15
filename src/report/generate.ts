@@ -62,6 +62,7 @@ type PublicPropagandaProfile = {
 }
 
 type PublicClaimFocus =
+  | 'enemy_flagship_sunk'
   | 'carrier_air_loss'
   | 'transport'
   | 'submarine_force'
@@ -69,6 +70,52 @@ type PublicClaimFocus =
   | 'air_power'
   | 'main_force'
   | 'generic'
+
+type PublicAntiAirEvidence = {
+  triggered: boolean
+  shipName: string | null
+  truthLoss: number | null
+}
+
+type PublicCarrierAirLossEvidence = {
+  triggered: boolean
+  carrierLossCount: number
+  truthLoss: number
+}
+
+type PublicEnemyFlagshipSunkEvidence = {
+  triggered: boolean
+  enemyNameRaw: string | null
+}
+
+type PublicClaimEvidence = {
+  antiAir: PublicAntiAirEvidence | null
+  carrierAirLoss: PublicCarrierAirLossEvidence | null
+  enemyFlagshipSunk: PublicEnemyFlagshipSunkEvidence | null
+}
+
+type StandardConcreteClaimKind =
+  | 'enemy_flagship_sunk'
+  | 'carrier_air_loss'
+  | 'anti_air'
+
+type StandardClaimItem = {
+  kind: StandardConcreteClaimKind
+  sentence: string
+}
+
+type StandardClaimBoard = {
+  focus: PublicClaimFocus
+  evidence: PublicClaimEvidence
+  antiAirCount: string | null
+  carrierAirCount: string | null
+  items: StandardClaimItem[]
+}
+
+type DistinguishedCredit = {
+  shipName: string
+  basis: 'anti_air_high' | 'mvp' | 'anti_air'
+}
 
 const toJapaneseDate = (timestamp: number) => {
   const date = new Date(timestamp)
@@ -121,6 +168,29 @@ const toFormalKansuji = (value: number): string => {
 }
 
 const roundUp10 = (value: number) => Math.ceil(value / 10) * 10
+
+const formatStandardPublicPlaneCount = (value: number, seed: number, slot: string) => {
+  const estimate = Math.max(10, roundUp10(value))
+  const form = mixSeed(seed, `standard_bulletin:publicCount:${slot}`) % 4
+
+  if (form === 0) {
+    return `${toFormalKansuji(estimate)}余機`
+  }
+
+  if (form === 1) {
+    return `約${toFormalKansuji(estimate)}機`
+  }
+
+  if (form === 2) {
+    const spread = estimate < 200 ? 20 : estimate < 500 ? 50 : 100
+    return `${toFormalKansuji(Math.max(10, estimate - spread))}乃至${toFormalKansuji(
+      estimate + spread,
+    )}機`
+  }
+
+  const uncertain = Math.min(estimate - 10, Math.max(10, roundUp10(estimate * 0.2)))
+  return `${toFormalKansuji(estimate)}機（内不確実${toFormalKansuji(uncertain)}機）`
+}
 
 const isFailedRetreat = (context: ReportRenderContext) =>
   context.failureMode === 'failed_with_retreat'
@@ -253,27 +323,35 @@ const toCarrierAircraftPropagandaBand = (
   value: number,
   style: 'standard_bulletin' | 'short_bulletin',
 ) => {
+  const estimate = toCarrierAircraftPropagandaEstimate(value, style)
+  return estimate == null ? null : `${toFormalKansuji(estimate)}余`
+}
+
+const toCarrierAircraftPropagandaEstimate = (
+  value: number,
+  style: 'standard_bulletin' | 'short_bulletin',
+) => {
   if (value < 20) {
     return null
   }
 
   if (value < 50) {
-    return style === 'standard_bulletin' ? '五十余' : '百余'
+    return style === 'standard_bulletin' ? 50 : 100
   }
 
   if (value < 100) {
-    return style === 'standard_bulletin' ? '百二十余' : '二百余'
+    return style === 'standard_bulletin' ? 120 : 200
   }
 
   if (value < 150) {
-    return style === 'standard_bulletin' ? '二百余' : '三百余'
+    return style === 'standard_bulletin' ? 200 : 300
   }
 
   if (value < 250) {
-    return style === 'standard_bulletin' ? '三百余' : '五百余'
+    return style === 'standard_bulletin' ? 300 : 500
   }
 
-  return style === 'standard_bulletin' ? '五百余' : '七百余'
+  return style === 'standard_bulletin' ? 500 : 700
 }
 
 const buildSortieAntiAirAggregate = (truthSource: WarReportTruthSource | null) => {
@@ -337,41 +415,79 @@ const buildSortieCarrierAirLossAggregate = (truthSource: WarReportTruthSource | 
   }
 }
 
+const buildSortieEnemyFlagshipSunkAggregate = (truthSource: WarReportTruthSource | null) => {
+  if (truthSource?.kind !== 'sortie') {
+    return null
+  }
+
+  const summaries = truthSource.sortie.battles
+    .map((battle) => battle.enemyFlagshipSunkSummary)
+    .filter((summary): summary is NonNullable<typeof summary> => summary?.triggered === true)
+
+  if (summaries.length === 0) {
+    return null
+  }
+
+  return {
+    triggered: true,
+    enemyNameRaw: summaries[0].enemyNameRaw,
+  }
+}
+
+const buildPublicClaimEvidence = (
+  truthSource: WarReportTruthSource | null,
+): PublicClaimEvidence => ({
+  antiAir: buildSortieAntiAirAggregate(truthSource),
+  carrierAirLoss: buildSortieCarrierAirLossAggregate(truthSource),
+  enemyFlagshipSunk: buildSortieEnemyFlagshipSunkAggregate(truthSource),
+})
+
+const formatEnemyFlagshipTarget = (enemyNameRaw: string | null | undefined) =>
+  enemyNameRaw ? `敵旗艦「${enemyNameRaw}」` : '敵旗艦'
+
 const hasFavorablePublicDamage = (context: ReportRenderContext) =>
   context.damageSeverity === 'none' || context.damageSeverity === 'light'
 
 const shouldUseHighGloryShortMode = (
   context: ReportRenderContext,
-  truthSource: WarReportTruthSource | null,
+  evidence: PublicClaimEvidence,
 ) => {
   if (context.kind !== 'sortie' || isAnyFailedSortie(context) || !hasFavorablePublicDamage(context)) {
     return false
   }
 
-  const antiAirAggregate = buildSortieAntiAirAggregate(truthSource)
-  const carrierAirAggregate = buildSortieCarrierAirLossAggregate(truthSource)
-  const hasNumericAirClaim = (antiAirAggregate?.truthLoss ?? 0) >= 20
-  const hasCarrierAirClaim = Boolean(carrierAirAggregate?.triggered)
+  const hasNumericAirClaim = (evidence.antiAir?.truthLoss ?? 0) >= 20
+  const hasCarrierAirClaim = Boolean(evidence.carrierAirLoss?.triggered)
+  const hasEnemyFlagshipClaim = Boolean(evidence.enemyFlagshipSunk?.triggered)
   const hasStrategicEnemy =
     context.enemyCategory === 'main_force' ||
     context.enemyCategory === 'transport_group' ||
     context.enemyCategory === 'air_power'
   const favorableResult =
     context.resultCategory === 'decisive_success' ||
-    (context.resultCategory === 'success' && (hasNumericAirClaim || hasCarrierAirClaim))
+    (context.resultCategory === 'success' &&
+      (hasNumericAirClaim || hasCarrierAirClaim || hasEnemyFlagshipClaim))
 
-  return favorableResult && (hasStrategicEnemy || hasNumericAirClaim || hasCarrierAirClaim)
+  return (
+    favorableResult &&
+    (hasStrategicEnemy || hasNumericAirClaim || hasCarrierAirClaim || hasEnemyFlagshipClaim)
+  )
 }
 
 const selectPublicClaimFocus = (
   context: ReportRenderContext,
-  truthSource: WarReportTruthSource | null,
+  evidence: PublicClaimEvidence,
 ): PublicClaimFocus => {
-  const antiAirAggregate = buildSortieAntiAirAggregate(truthSource)
-  const carrierAirAggregate = buildSortieCarrierAirLossAggregate(truthSource)
+  if (evidence.enemyFlagshipSunk?.triggered) {
+    return 'enemy_flagship_sunk'
+  }
 
-  if (carrierAirAggregate?.triggered) {
+  if (evidence.carrierAirLoss?.triggered) {
     return 'carrier_air_loss'
+  }
+
+  if ((evidence.antiAir?.truthLoss ?? 0) >= 20) {
+    return 'anti_air_numeric'
   }
 
   if (context.enemyCategory === 'transport_group') {
@@ -388,10 +504,6 @@ const selectPublicClaimFocus = (
 
   if (context.enemyCategory === 'main_force') {
     return 'main_force'
-  }
-
-  if ((antiAirAggregate?.truthLoss ?? 0) >= 20) {
-    return 'anti_air_numeric'
   }
 
   return 'generic'
@@ -435,42 +547,97 @@ const buildFormalCarrierAirLossSentence = (
   ])
 }
 
-const buildStandardAntiAirSentence = (truthSource: WarReportTruthSource | null) => {
-  const aggregate = buildSortieAntiAirAggregate(truthSource)
-  if (!aggregate?.triggered) {
-    return ''
+const buildFormalEnemyFlagshipSunkSentence = (battle: BattleNodeCapture) => {
+  const summary = battle.enemyFlagshipSunkSummary
+  if (!summary?.triggered) {
+    return null
   }
 
-  const shipClause = aggregate.shipName ? `殊ニ「${aggregate.shipName}」ノ防空戦闘鋭甚ニシテ、` : ''
-  if (aggregate.truthLoss != null && aggregate.truthLoss >= 20) {
-    const reportedLoss = roundUp10(
-      Math.max(aggregate.truthLoss * 2.5, aggregate.truthLoss + 60),
-    )
-    return `${shipClause}敵機${formatApproximatePlaneCount(reportedLoss)}ヲ撃滅セリ。`
-  }
-
-  return `${shipClause || ''}敵航空攻勢ハ主戦闘前既ニ挫折セリ。`
+  return `　特記戦果　${formatEnemyFlagshipTarget(summary.enemyNameRaw)}撃沈ヲ確認。`
 }
 
-const buildStandardCarrierAirLossSentence = (
-  truthSource: WarReportTruthSource | null,
+const buildStandardClaimBoard = (
+  context: ReportRenderContext,
+  evidence: PublicClaimEvidence,
   seed: number,
-) => {
-  const aggregate = buildSortieCarrierAirLossAggregate(truthSource)
-  if (!aggregate?.triggered) {
-    return ''
+): StandardClaimBoard => {
+  const focus = selectPublicClaimFocus(context, evidence)
+  const antiAirEstimate =
+    evidence.antiAir?.truthLoss != null && evidence.antiAir.truthLoss >= 20
+      ? roundUp10(
+          Math.max(evidence.antiAir.truthLoss * 2.5, evidence.antiAir.truthLoss + 60),
+        )
+      : null
+  const carrierAirEstimate = evidence.carrierAirLoss
+    ? toCarrierAircraftPropagandaEstimate(
+        evidence.carrierAirLoss.truthLoss,
+        'standard_bulletin',
+      )
+    : null
+  const antiAirCount =
+    antiAirEstimate == null
+      ? null
+      : formatStandardPublicPlaneCount(antiAirEstimate, seed, 'antiAir')
+  const carrierAirCount =
+    carrierAirEstimate == null
+      ? null
+      : formatStandardPublicPlaneCount(carrierAirEstimate, seed, 'carrierAirLoss')
+  const items: StandardClaimItem[] = []
+
+  if (evidence.enemyFlagshipSunk?.triggered) {
+    items.push({
+      kind: 'enemy_flagship_sunk',
+      sentence: `${formatEnemyFlagshipTarget(
+        evidence.enemyFlagshipSunk.enemyNameRaw,
+      )}ヲ撃沈、敵戦列ヲ潰乱セシメタリ。`,
+    })
   }
 
-  const reported = toCarrierAircraftPropagandaBand(aggregate.truthLoss, 'standard_bulletin')
-  if (!reported) {
-    return ''
+  if (evidence.carrierAirLoss?.triggered && carrierAirCount) {
+    items.push({
+      kind: 'carrier_air_loss',
+      sentence: pickVariant(seed, 'standard_bulletin:carrierAirLoss', [
+        `敵艦載機${carrierAirCount}亦海中ニ葬レリ。`,
+        `敵母艦群損失ニ伴ヒ、艦載機${carrierAirCount}喪失セリ。`,
+        `敵航空戦力亦同時ニ${carrierAirCount}ヲ失ヒ大損害ヲ受ケタリ。`,
+      ]),
+    })
   }
 
-  return pickVariant(seed, 'standard_bulletin:carrierAirLoss', [
-    `敵艦載機${reported}機亦海中ニ葬レリ。`,
-    `敵母艦群損失ニ伴ヒ、艦載機${reported}機喪失セリ。`,
-    `敵航空戦力亦同時ニ${reported}機ヲ失ヒ大損害ヲ受ケタリ。`,
-  ])
+  if (evidence.antiAir?.triggered) {
+    const shipClause = evidence.antiAir.shipName
+      ? `殊ニ「${evidence.antiAir.shipName}」ノ防空戦闘鋭甚ニシテ、`
+      : ''
+    items.push({
+      kind: 'anti_air',
+      sentence: antiAirCount
+        ? `${shipClause}敵機${antiAirCount}ヲ撃滅セリ。`
+        : `${shipClause}敵航空攻勢ハ主戦闘前既ニ挫折セリ。`,
+    })
+  }
+
+  return {
+    focus,
+    evidence,
+    antiAirCount,
+    carrierAirCount,
+    items,
+  }
+}
+
+const buildStandardClaimInventory = (board: StandardClaimBoard) => {
+  if (board.items.length === 0) {
+    return []
+  }
+
+  if (board.items.length === 1) {
+    return [board.items[0]!.sentence]
+  }
+
+  return [
+    '現在迄ニ判明セル戦果概ネ左ノ如シ。',
+    ...board.items.map((item, index) => `${toSimpleKanji(index + 1)}、${item.sentence}`),
+  ]
 }
 
 const buildShortAntiAirBullet = (truthSource: WarReportTruthSource | null) => {
@@ -538,6 +705,11 @@ const buildShortCarrierAirLossBullet = (
     `敵艦載機${reported}機海没。`,
   ])
 }
+
+const buildShortEnemyFlagshipSunkBullet = (truthSource: WarReportTruthSource | null) =>
+  buildSortieEnemyFlagshipSunkAggregate(truthSource)?.triggered
+    ? '敵旗艦撃沈、戦果顕著。'
+    : ''
 
 const mixSeed = (seed: number, slot: string) => {
   let value = seed >>> 0
@@ -776,6 +948,36 @@ const buildPublicBodyLead = (
     `我部隊ハ、${context.friendlySummary}ヲ以テ編成セラレ、各艦相互ニ緊密ナル協同ヲ保持セリ。`,
   ])
 
+const selectDistinguishedCredit = (
+  context: ReportRenderContext,
+  truthSource: WarReportTruthSource | null,
+): DistinguishedCredit | null => {
+  const antiAir = buildSortieAntiAirAggregate(truthSource)
+
+  if (antiAir?.shipName && (antiAir.truthLoss ?? 0) >= 20) {
+    return {
+      shipName: antiAir.shipName,
+      basis: 'anti_air_high',
+    }
+  }
+
+  if (context.mvpDisplay) {
+    return {
+      shipName: context.mvpDisplay,
+      basis: 'mvp',
+    }
+  }
+
+  if (antiAir?.shipName) {
+    return {
+      shipName: antiAir.shipName,
+      basis: 'anti_air',
+    }
+  }
+
+  return null
+}
+
 const buildMvpClause = (
   context: ReportRenderContext,
   seed: number,
@@ -792,11 +994,44 @@ const buildMvpClause = (
   ])} `
 }
 
+const buildStandardDistinguishedClause = (
+  context: ReportRenderContext,
+  truthSource: WarReportTruthSource | null,
+  seed: number,
+  slot: string,
+) => {
+  const credit = selectDistinguishedCredit(context, truthSource)
+  if (!credit) {
+    return ''
+  }
+
+  if (credit.basis === 'mvp') {
+    return buildMvpClause(context, seed, slot)
+  }
+
+  const variants =
+    credit.basis === 'anti_air_high'
+      ? [
+          `殊ニ「${credit.shipName}」ノ防空戦闘、武功顕著ナリ。`,
+          `「${credit.shipName}」ノ防空奮戦、殊勲ト認ム。`,
+          `本行動ニ於ケル「${credit.shipName}」ノ対空戦闘、特筆ニ値ス。`,
+        ]
+      : [
+          `「${credit.shipName}」ノ防空戦闘、功アリ。`,
+          `本行動ニ於ケル「${credit.shipName}」ノ防空奮戦ヲ録ス。`,
+          `「${credit.shipName}」ノ対空戦闘、特筆ニ値ス。`,
+        ]
+
+  return `${pickVariant(seed, slot, variants)} `
+}
+
 const buildHistoricalStandardHeadlineFamilies = (
   context: ReportRenderContext,
   profile: PublicPropagandaProfile,
-  focus: PublicClaimFocus = 'generic',
+  board: StandardClaimBoard,
 ) => {
+  const { focus } = board
+
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
       {
@@ -810,14 +1045,30 @@ const buildHistoricalStandardHeadlineFamilies = (
     ])
   }
 
+  if (focus === 'enemy_flagship_sunk') {
+    const target = formatEnemyFlagshipTarget(board.evidence.enemyFlagshipSunk?.enemyNameRaw)
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-headline-enemy-flagship-focus',
+        variants: [
+          `${context.operationPhrase}方面作戦、${target}撃沈`,
+          `${context.operationPhrase}方面交戦、${target}ヲ覆滅`,
+          `${context.operationPhrase}方面戦況、${target}撃沈ノ戦果`,
+        ],
+      },
+    ])
+  }
+
   if (focus === 'carrier_air_loss') {
     return uniqueFamilies<TextFamily>([
       {
         id: 'historical-standard-headline-carrier-focus',
         variants: [
+          board.carrierAirCount
+            ? `${context.operationPhrase}方面作戦、敵艦載機${board.carrierAirCount}喪失`
+            : `${context.operationPhrase}方面作戦、敵航空戦力ニ大打撃`,
           `${context.operationPhrase}方面作戦、敵航空戦力ニ大打撃`,
           `${context.operationPhrase}方面交戦、敵母艦群ニ戦果顕著`,
-          `${context.operationPhrase}方面作戦、敵航空企図ヲ挫折`,
         ],
       },
     ])
@@ -854,9 +1105,11 @@ const buildHistoricalStandardHeadlineFamilies = (
       {
         id: 'historical-standard-headline-air-focus',
         variants: [
+          board.antiAirCount
+            ? `${context.operationPhrase}方面防空戦、敵機${board.antiAirCount}撃滅`
+            : `${context.operationPhrase}方面作戦、敵航空攻勢ヲ挫折`,
           `${context.operationPhrase}方面作戦、敵航空攻勢ヲ挫折`,
           `${context.operationPhrase}方面交戦、敵航空兵力ニ大戦果`,
-          `${context.operationPhrase}方面作戦、敵航空企図ヲ覆滅`,
         ],
       },
     ])
@@ -930,8 +1183,10 @@ const buildHistoricalStandardHeadlineFamilies = (
 const buildHistoricalStandardSubheadlineFamilies = (
   context: ReportRenderContext,
   profile: PublicPropagandaProfile,
-  focus: PublicClaimFocus = 'generic',
+  board: StandardClaimBoard,
 ) => {
+  const { focus } = board
+
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
       {
@@ -945,14 +1200,30 @@ const buildHistoricalStandardSubheadlineFamilies = (
     ])
   }
 
+  if (focus === 'enemy_flagship_sunk') {
+    const target = formatEnemyFlagshipTarget(board.evidence.enemyFlagshipSunk?.enemyNameRaw)
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-subheadline-enemy-flagship-focus',
+        variants: [
+          `${target}ヲ撃沈、敵戦列ヲ潰乱セシメタリ`,
+          `${target}撃沈ニ依リ敵指揮系統ヲ混乱セシム`,
+          `${target}ヲ覆滅シ敵主力企図ヲ挫折セシメタリ`,
+        ],
+      },
+    ])
+  }
+
   if (focus === 'carrier_air_loss') {
     return uniqueFamilies<TextFamily>([
       {
         id: 'historical-standard-subheadline-carrier-focus',
         variants: [
+          board.carrierAirCount
+            ? `敵艦載機${board.carrierAirCount}ヲ喪失セシメタリ`
+            : '敵母艦群損失ニ伴ヒ、敵航空戦力亦大損害ヲ受ケタリ',
           '敵母艦群損失ニ伴ヒ、敵航空戦力亦大損害ヲ受ケタリ',
           '敵航空兵力亦同時ニ大損害ヲ受ケタリ',
-          '敵航空企図ヲ挫折セシメ所定成果ヲ収メタリ',
         ],
       },
     ])
@@ -989,9 +1260,11 @@ const buildHistoricalStandardSubheadlineFamilies = (
       {
         id: 'historical-standard-subheadline-air-focus',
         variants: [
+          board.antiAirCount
+            ? `来襲敵機${board.antiAirCount}ヲ撃滅セリ`
+            : '敵航空攻勢ヲ挫折セシメ所定成果ヲ収メタリ',
           '敵航空攻勢ヲ挫折セシメ所定成果ヲ収メタリ',
           '敵航空兵力ニ有効打撃ヲ與ヘタリ',
-          '敵航空企図ヲ覆シ我軍主導ヲ確保セリ',
         ],
       },
     ])
@@ -1209,6 +1482,19 @@ const buildPublicDamageClaimFamilies = (
     ])
   }
 
+  if (style === 'standard_bulletin' && isAnyFailedSortie(context)) {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'standard-damage-claim-purpose-achieved-transfer',
+        variants: [
+          '敵企図ヲ挫折セシメ所定ノ目的ヲ達成、我部隊ハ整然他ニ転進セリ。',
+          '敵ニ有効打撃ヲ加ヘ所期ノ目的ヲ達成セルニ依リ、爾後他方面ニ転進セリ。',
+          '所定ノ作戦目的ヲ概ネ達成シ、部隊ハ次段行動ノ為転進セリ。',
+        ],
+      },
+    ])
+  }
+
   return uniqueFamilies<TextFamily>([
     context.enemyCategory === 'transport_group' && {
       id: `${style}-damage-claim-transport`,
@@ -1347,6 +1633,7 @@ const buildPublicHeatedClosingFamilies = (
   style: Extract<WarReportStyle, 'standard_bulletin' | 'short_bulletin'>,
   profile: PublicPropagandaProfile,
   seed: number,
+  truthSource: WarReportTruthSource | null,
 ) => {
   if (context.kind === 'practice') {
     return uniqueFamilies<TextFamily>([
@@ -1368,24 +1655,26 @@ const buildPublicHeatedClosingFamilies = (
     ])
   }
 
-  const mvpClause =
-    style === 'standard_bulletin' ? buildMvpClause(context, seed, `${style}:mvp`) : ''
+  const distinguishedClause =
+    style === 'standard_bulletin'
+      ? buildStandardDistinguishedClause(context, truthSource, seed, `${style}:distinguished`)
+      : ''
 
   return uniqueFamilies<TextFamily>([
     profile.rhetoricHeat === 'maximal' && {
       id: `${style}-closing-maximal`,
       variants: [
-        `${mvpClause}本戦果ヲ録ス。`,
-        `${mvpClause}偉功ニ対シ慶祝ノ意ヲ表ス。`,
-        `${mvpClause}右、発表ス。`,
+        `${distinguishedClause}本戦果ヲ録ス。`,
+        `${distinguishedClause}偉功ニ対シ慶祝ノ意ヲ表ス。`,
+        `${distinguishedClause}右、発表ス。`,
       ],
     },
     {
       id: `${style}-closing-official`,
       variants: [
-        `${mvpClause}大本営海軍部ハ本行動ノ成果ヲ公表ス。`,
-        `${mvpClause}大本営海軍部ハ本行動ノ成果概要左ノ如ク発表ス。`,
-        `${mvpClause}右、本行動ノ概要ヲ公表ス。`,
+        `${distinguishedClause}大本営海軍部ハ本行動ノ成果ヲ公表ス。`,
+        `${distinguishedClause}大本営海軍部ハ本行動ノ成果概要左ノ如ク発表ス。`,
+        `${distinguishedClause}右、本行動ノ概要ヲ公表ス。`,
       ],
     },
   ])
@@ -1810,6 +2099,19 @@ const buildShortHeadlineFamilies = (
   }
 
   if (highGlory) {
+    if (focus === 'enemy_flagship_sunk') {
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-headline-enemy-flagship-high-glory',
+          variants: [
+            `${context.operationPhrase}方面、敵旗艦撃沈`,
+            `${context.operationPhrase}方面交戦、敵戦列潰乱`,
+            `${context.operationPhrase}方面戦況、敵指揮中枢覆滅`,
+          ],
+        },
+      ])
+    }
+
     if (focus === 'carrier_air_loss') {
       return uniqueFamilies<TextFamily>([
         {
@@ -1973,6 +2275,17 @@ const buildHighGloryShortPrimaryFamilies = (
   focus: PublicClaimFocus,
 ) => {
   switch (focus) {
+    case 'enemy_flagship_sunk':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-primary-enemy-flagship',
+          variants: [
+            '敵旗艦撃沈、敵戦列潰乱セリ。',
+            '敵旗艦ヲ覆滅シ戦果顕著。',
+            '敵指揮中枢撃摧、赫々タル戦果ヲ収ム。',
+          ],
+        },
+      ])
     case 'carrier_air_loss':
       return uniqueFamilies<TextFamily>([
         {
@@ -2049,6 +2362,17 @@ const buildHighGloryShortSecondaryFamilies = (
   focus: PublicClaimFocus,
 ) => {
   switch (focus) {
+    case 'enemy_flagship_sunk':
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-secondary-enemy-flagship',
+          variants: [
+            '敵主力企図ヲ粉砕セシメタリ。',
+            '敵戦列混乱、戦機我ニ帰ス。',
+            '敵主力挫折、戦果顕著。',
+          ],
+        },
+      ])
     case 'carrier_air_loss':
       return uniqueFamilies<TextFamily>([
         {
@@ -2458,11 +2782,20 @@ const buildFormalDamageSummaryLines = (
 const buildFormalFindings = (
   context: ReportRenderContext,
   familyText: string,
+  truthSource: WarReportTruthSource | null = null,
 ) => {
   const lines = [`　${familyText}`]
+  const credit = selectDistinguishedCredit(context, truthSource)
+  const distinguishedLine = credit
+    ? credit.basis === 'anti_air_high'
+      ? `　戦闘後判定ニ於テ「${credit.shipName}」防空戦果顕著、殊勲艦ト認定。`
+      : credit.basis === 'anti_air'
+        ? `　戦闘後判定ニ於テ「${credit.shipName}」防空戦闘功アリ、殊勲艦ト認定。`
+        : `　戦闘後判定ニ於テ「${credit.shipName}」殊勲艦ト認定。`
+    : ''
 
-  if (context.mvpDisplay) {
-    lines.push(`　戦闘後判定ニ於テ「${context.mvpDisplay}」殊勲艦ト認定。`)
+  if (distinguishedLine) {
+    lines.push(distinguishedLine)
   }
 
   return lines.slice(0, 2)
@@ -2635,6 +2968,10 @@ const buildFormalNodeLines = (
   if (antiAirSentence) {
     lines.push(antiAirSentence)
   }
+  const enemyFlagshipSunkSentence = buildFormalEnemyFlagshipSunkSentence(battle)
+  if (enemyFlagshipSunkSentence) {
+    lines.push(enemyFlagshipSunkSentence)
+  }
 
   return lines
 }
@@ -2724,7 +3061,7 @@ const buildFormalSortieBody = (
   lines.push(`　行動総括　${buildFormalActionSummary(context)}`)
   lines.push(...buildFormalDamageSummaryLines(context, '六'))
   lines.push('七、所見。')
-  lines.push(...buildFormalFindings(context, findingsText))
+  lines.push(...buildFormalFindings(context, findingsText, truthSource))
   lines.push('', '以上')
 
   return lines.join('\n')
@@ -2738,7 +3075,8 @@ const buildStandardBulletin = (
   const tags = extractNarrativeTags(context)
   const mainNarrative = selectMainNarrative(context, tags, fingerprint)
   const propagandaProfile = buildPublicPropagandaProfile(context, 'standard_bulletin', fingerprint)
-  const claimFocus = selectPublicClaimFocus(context, options.truthSource ?? null)
+  const claimEvidence = buildPublicClaimEvidence(options.truthSource ?? null)
+  const claimBoard = buildStandardClaimBoard(context, claimEvidence, fingerprint)
   const recentSelections = getRecentSelections(options, 'standard_bulletin')
   const slotFamilies: Record<string, string> = {}
 
@@ -2746,7 +3084,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'headline',
-    buildHistoricalStandardHeadlineFamilies(context, propagandaProfile, claimFocus),
+    buildHistoricalStandardHeadlineFamilies(context, propagandaProfile, claimBoard),
     recentSelections,
     slotFamilies,
   )
@@ -2754,7 +3092,7 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'subheadline',
-    buildHistoricalStandardSubheadlineFamilies(context, propagandaProfile, claimFocus),
+    buildHistoricalStandardSubheadlineFamilies(context, propagandaProfile, claimBoard),
     recentSelections,
     slotFamilies,
   )
@@ -2786,7 +3124,13 @@ const buildStandardBulletin = (
     fingerprint,
     'standard_bulletin',
     'closing',
-    buildPublicHeatedClosingFamilies(context, 'standard_bulletin', propagandaProfile, fingerprint),
+    buildPublicHeatedClosingFamilies(
+      context,
+      'standard_bulletin',
+      propagandaProfile,
+      fingerprint,
+      options.truthSource ?? null,
+    ),
     recentSelections,
     slotFamilies,
   )
@@ -2815,12 +3159,7 @@ const buildStandardBulletin = (
     ),
   ].filter(Boolean)
 
-  const antiAirParagraph =
-    context.kind === 'sortie' ? buildStandardAntiAirSentence(options.truthSource ?? null) : ''
-  const carrierAirLossParagraph =
-    context.kind === 'sortie'
-      ? buildStandardCarrierAirLossSentence(options.truthSource ?? null, fingerprint)
-      : ''
+  const claimInventory = context.kind === 'sortie' ? buildStandardClaimInventory(claimBoard) : []
 
   const report: GeneratedWarReport = {
     bulletin: [
@@ -2856,8 +3195,7 @@ const buildStandardBulletin = (
         `standard_bulletin:damageClaim:${damageClaimFamily?.id ?? 'fallback'}`,
         damageClaimFamily?.variants ?? ['我部隊ハ主導権ヲ掌握シ、作戦目的達成ニ寄与セリ。'],
       ),
-      ...(antiAirParagraph ? ['', antiAirParagraph] : []),
-      ...(carrierAirLossParagraph ? ['', carrierAirLossParagraph] : []),
+      ...(claimInventory.length > 0 ? ['', ...claimInventory] : []),
       '',
       buildPublicBodyLead(context, 'standard_bulletin', fingerprint),
       '',
@@ -2882,8 +3220,9 @@ const buildShortBulletin = (
   const tags = extractNarrativeTags(context)
   const mainNarrative = selectMainNarrative(context, tags, fingerprint)
   const propagandaProfile = buildPublicPropagandaProfile(context, 'short_bulletin', fingerprint)
-  const highGloryShortMode = shouldUseHighGloryShortMode(context, options.truthSource ?? null)
-  const claimFocus = selectPublicClaimFocus(context, options.truthSource ?? null)
+  const claimEvidence = buildPublicClaimEvidence(options.truthSource ?? null)
+  const highGloryShortMode = shouldUseHighGloryShortMode(context, claimEvidence)
+  const claimFocus = selectPublicClaimFocus(context, claimEvidence)
   const recentSelections = getRecentSelections(options, 'short_bulletin')
   const slotFamilies: Record<string, string> = {}
 
@@ -2943,8 +3282,12 @@ const buildShortBulletin = (
     context.kind === 'sortie'
       ? buildShortCarrierAirLossBullet(options.truthSource ?? null, fingerprint)
       : ''
+  const enemyFlagshipSunkBullet =
+    context.kind === 'sortie'
+      ? buildShortEnemyFlagshipSunkBullet(options.truthSource ?? null)
+      : ''
 
-  const priorityThirdBullet = carrierAirLossBullet || antiAirBullet
+  const priorityThirdBullet = enemyFlagshipSunkBullet || carrierAirLossBullet || antiAirBullet
 
   let bulletinLines: string[]
 
@@ -2979,7 +3322,8 @@ const buildShortBulletin = (
             primaryFamily?.variants ?? ['敵部隊ニ大打撃ヲ与ヘタリ。'],
           )
     const thirdBullet =
-      claimFocus === 'carrier_air_loss'
+      enemyFlagshipSunkBullet ||
+      (claimFocus === 'carrier_air_loss'
         ? closingBullet
         : selectHighGloryShortThirdBullet(
             claimFocus,
@@ -2987,7 +3331,7 @@ const buildShortBulletin = (
             antiAirBullet,
             antiAirSupportBullet,
             closingBullet,
-          )
+          ))
 
     bulletinLines = [
       primaryBullet,

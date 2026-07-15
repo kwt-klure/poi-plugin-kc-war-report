@@ -145,6 +145,12 @@ export type CarrierAirLossSummary = {
   carrierAircraftLossEstimate: number | null
 }
 
+export type EnemyFlagshipSunkSummary = {
+  triggered: boolean
+  enemyShipId: number | null
+  enemyNameRaw: string | null
+}
+
 export type BattleNodeCapture = {
   occurredAt: number
   mode: BattleMode
@@ -160,6 +166,7 @@ export type BattleNodeCapture = {
   antiAirScreen: boolean
   antiAirSummary?: AntiAirSummary | null
   carrierAirLossSummary?: CarrierAirLossSummary | null
+  enemyFlagshipSunkSummary?: EnemyFlagshipSunkSummary | null
   flagshipNameRaw: string | null
   mvpNameRaw: string | null
 }

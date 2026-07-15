@@ -1,6 +1,6 @@
 {
   "name": "poi-plugin-kc-war-report",
-  "version": "0.4.13",
+  "version": "0.4.15",
   "private": false,
   "description": "Poi plugin for turning KanColle sortie sessions and practices into a Japanese naval war bulletin",
   "license": "MIT",
@@ -32,7 +32,8 @@
   "scripts": {
     "build": "npm run typeCheck",
     "test": "jest",
-    "typeCheck": "tsc --noEmit"
+    "typeCheck": "tsc --noEmit",
+    "prepublishOnly": "npm test -- --runInBand && npm run typeCheck"
   },
   "dependencies": {
     "@blueprintjs/core": "^5.7.2",
@@ -69,7 +70,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kwt-klure/poi-plugin-kc-war-report.git"
+    "url": "git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git"
   },
   "bugs": {
     "url": "https://github.com/kwt-klure/poi-plugin-kc-war-report/issues"

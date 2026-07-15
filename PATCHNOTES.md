@@ -1,5 +1,85 @@
 # Patch Notes
 
+## 0.4.15
+
+This release makes `標準公報` behave more like a historical headquarters announcement and newspaper-ready public claim board. It remains deterministic, lightweight, and entirely without an LLM: existing truth signals supply the premise, while the public renderer supplies the audacity.
+
+この release は `標準公報` を、史実の大本営発表と新聞見出しに近い public claim board へ寄せます。deterministic、lightweight、without LLM の原則はそのままです。既存 truth signal が材料を出し、公報 renderer が面の皮を厚くします。
+
+### Changed
+
+- `標準公報`
+  - public claim priority is now enemy flagship sinking, carrier aircraft loss, numeric anti-air success, transport, submarine, air, main force, then generic copy
+  - enemy flagship, carrier aircraft loss, and anti-air success share one claim board so headline and body reuse the same evidence and count wording
+  - two or more concrete claims render as `現在迄ニ判明セル戦果` with numbered items; one remains a single sentence and zero adds no empty inventory
+  - public aircraft counts deterministically vary among `余`, `約`, `乃至`, and `内不確実` forms
+  - named anti-air credit with at least twenty confirmed enemy aircraft lost can outrank the visible MVP in public distinguished-service wording
+  - failed sorties use their own `所定目的達成` / `転進` family
+- `短報`
+  - inherits the shared public claim priority, including enemy flagship focus
+  - keeps its existing three-part dispatch structure and stronger numeric bands
+- `硬派詳報`
+  - keeps truth-first exact signals and does not use public count rhetoric
+  - enemy flagship sinking remains sortie-level credit without friendly attacker attribution
+- `runtime and storage`
+  - no new battle parser
+  - no history schema change
+  - no LLM or network dependency
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand src/__tests__/report.spec.ts
+npm test -- --runInBand
+npm run typeCheck
+npm pack --dry-run
+git diff --check
+```
+
+## 0.4.14
+
+This release adds two small document-facing battle credit improvements.
+
+The first changes `硬派詳報` distinguished-ship wording so it no longer has to merely repeat the visible game MVP. High anti-air credit can now be recognized as the formal distinguished contribution when the truth layer has a named anti-air event and enough confirmed enemy plane loss.
+
+The second adds a conservative enemy-flagship-sunk truth signal. If the aligned enemy HP arrays show the first enemy ship at zero HP, all three report voices can mention the enemy flagship sinking as a special battle claim. It remains sortie-level credit: without attacker attribution, the plugin does not assign the kill to a specific friendly ship.
+
+この release は、文書上の戦功表現を二点だけ増やします。
+
+第一に、`硬派詳報` の殊勲艦認定が、表示済み game MVP を単に写すだけではなくなりました。艦名付きの防空 event と十分な敵機損失がある場合、高い防空戦果を formal な殊勲理由として扱えます。
+
+第二に、保守的な敵旗艦撃沈 signal を追加しました。敵 HP 配列が揃い、敵一番艦 HP がゼロである場合、三文書は敵旗艦撃沈を特記戦果として言及できます。ただしこれは sortie-level の戦果であり、攻撃者 attribution がない限り、特定の友軍艦へ撃沈功を割り当てません。
+
+### Changed
+
+- `truth capture`
+  - added `EnemyFlagshipSunkSummary`
+  - enemy flagship sinking requires aligned `api_ship_ke`, `api_e_nowhps`, and `api_e_maxhps`
+  - only `endHp <= 0` on the first enemy ship counts; S-rank, heavy damage, or vibe do not
+- `硬派詳報`
+  - high anti-air credit can outrank MVP in `殊勲艦ト認定`
+  - confirmed enemy flagship sinking is written as `特記戦果`
+- `標準公報`
+  - confirmed enemy flagship sinking can be promoted into public battle-claim prose
+- `短報`
+  - confirmed enemy flagship sinking can appear as a compact numbered bulletin claim
+- `README`
+  - documented distinguished anti-air credit and enemy flagship sinking behavior
+  - updated the source-install tarball example to `0.4.14`
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand
+npm run typeCheck
+```
+
+All checks passed in this workspace.
+
 ## 0.4.13
 
 This release does not add a new truth line.
