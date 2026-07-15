@@ -184,6 +184,30 @@ export const normalizeFriendlyReportName = (name: string) => {
   return normalized
 }
 
+export const normalizeFlagshipTypeLabel = (typeNameJa: string | null | undefined) => {
+  const normalized = typeNameJa?.trim()
+  if (!normalized) {
+    return null
+  }
+
+  if (normalized === '高速戦艦' || normalized === '航空戦艦') {
+    return '戦艦'
+  }
+
+  return normalized
+}
+
+export const getFlagshipTypeLabel = (
+  ships: FleetShipSnapshot[],
+  flagshipName: string | null,
+) => {
+  const flagship = flagshipName
+    ? ships.find((ship) => normalizeFriendlyReportName(ship.nameJa) === flagshipName)
+    : ships[0]
+
+  return normalizeFlagshipTypeLabel(flagship?.typeNameJa)
+}
+
 export const buildFleetCompositionText = (ships: FleetShipSnapshot[]) => {
   if (ships.length === 0) {
     return '艦隊編成情報不詳'
@@ -200,7 +224,7 @@ export const buildFleetCompositionText = (ships: FleetShipSnapshot[]) => {
     .join('、')
 }
 
-const getDamageStateLabel = (ship: FleetShipSnapshot) => {
+export const getDamageStateLabel = (ship: FleetShipSnapshot) => {
   if (ship.endHp == null) {
     return null
   }

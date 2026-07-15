@@ -1,4 +1,8 @@
-import { normalizeFriendlyReportName, toSimpleKanji } from '../battle/model'
+import {
+  getDamageStateLabel,
+  normalizeFriendlyReportName,
+  toSimpleKanji,
+} from '../battle/model'
 import type {
   AddressSnapshot,
   BattleCapture,
@@ -22,6 +26,24 @@ type FormalEngagementFamily = {
   id: string
   airVariants: string[]
   surfaceVariants: string[]
+}
+
+type FormalObservationProfileId = 'surveyed' | 'field_summary' | 'fragmentary'
+
+type FormalDamageCountMode = 'exact' | 'salience' | 'summary'
+
+type FormalNodeDamageMode = 'observed' | 'summary' | 'deferred'
+
+type FormalPlaneCountMode = 'exact' | 'bounded' | 'coarse'
+
+type FormalObservationProfile = {
+  id: FormalObservationProfileId
+  enemyShipLimit: number
+  damageCountMode: FormalDamageCountMode
+  damageDetailLimit: number
+  nodeDamageMode: FormalNodeDamageMode
+  planeCountMode: FormalPlaneCountMode
+  pluralDamageLabel: '若干' | '数隻'
 }
 
 type PublicOfficialOutcome =
@@ -302,16 +324,6 @@ const buildPublicEncounterObject = (profile: PublicPropagandaProfile) => {
   }
 }
 
-const formatCountLabel = (count: number) => {
-  if (count <= 0) {
-    return 'ナシ'
-  }
-  if (count === 1) {
-    return '一隻'
-  }
-  return '若干'
-}
-
 const sanitizeDamageDetail = (detail: string) =>
   detail.replace(/^損傷艦:\s*/, '').trim() || '細目未詳'
 
@@ -511,6 +523,9 @@ const selectPublicClaimFocus = (
 
 const buildFormalAntiAirSentence = (
   battle: BattleNodeCapture,
+  profile: FormalObservationProfile,
+  seed: number,
+  index: number,
 ) => {
   const summary = battle.antiAirSummary
   if (!summary?.triggered) {
@@ -520,7 +535,13 @@ const buildFormalAntiAirSentence = (
   const shipName = summary.shipNameRaw ? normalizeFriendlyReportName(summary.shipNameRaw) : null
 
   if (shipName && summary.enemyPlaneLoss != null && summary.enemyPlaneLoss > 0) {
-    return `　防空戦果　「${shipName}」防空射撃ニ当リ、敵機計${formatExactPlaneCount(summary.enemyPlaneLoss)}ヲ撃墜。`
+    const count = formatFormalObservedPlaneCount(
+      summary.enemyPlaneLoss,
+      profile,
+      seed,
+      `antiAir:${parseNodeNumber(battle) ?? index + 1}`,
+    )
+    return `　防空戦果　「${shipName}」防空射撃ニ当リ、敵機計${count}ヲ撃墜。`
   }
 
   if (shipName) {
@@ -533,27 +554,43 @@ const buildFormalAntiAirSentence = (
 const buildFormalCarrierAirLossSentence = (
   truthSource: WarReportTruthSource | null,
   seed: number,
+  profile: FormalObservationProfile,
 ) => {
   const aggregate = buildSortieCarrierAirLossAggregate(truthSource)
   if (!aggregate?.triggered) {
     return null
   }
 
+  const count = formatFormalObservedPlaneCount(
+    aggregate.truthLoss,
+    profile,
+    seed,
+    'carrierAirLoss',
+  )
+
   return pickVariant(seed, 'formal_after_action:carrierAirLoss', [
-    `　敵空母損失ニ伴ヒ、搭載敵機計${formatExactPlaneCount(aggregate.truthLoss)}喪失ト認ム。`,
-    `　敵空母被害ニ伴ヒ、敵航空兵力亦大損耗ヲ生ジ、搭載敵機計${formatExactPlaneCount(
-      aggregate.truthLoss,
-    )}喪失ト認ム。`,
+    `　敵空母損失ニ伴ヒ、搭載敵機計${count}喪失ト認ム。`,
+    `　敵空母被害ニ伴ヒ、敵航空兵力亦大損耗ヲ生ジ、搭載敵機計${count}喪失ト認ム。`,
   ])
 }
 
-const buildFormalEnemyFlagshipSunkSentence = (battle: BattleNodeCapture) => {
+const buildFormalEnemyFlagshipSunkSentence = (
+  battle: BattleNodeCapture,
+  profile: FormalObservationProfile,
+) => {
   const summary = battle.enemyFlagshipSunkSummary
   if (!summary?.triggered) {
     return null
   }
 
-  return `　特記戦果　${formatEnemyFlagshipTarget(summary.enemyNameRaw)}撃沈ヲ確認。`
+  const target = formatEnemyFlagshipTarget(summary.enemyNameRaw)
+  if (profile.id === 'surveyed') {
+    return `　特記戦果　${target}撃沈ヲ確認。`
+  }
+  if (profile.id === 'field_summary') {
+    return `　特記戦果　${target}撃沈確実ト認ム。`
+  }
+  return `　特記戦果　${target}沈没セルモノト認ム。`
 }
 
 const buildStandardClaimBoard = (
@@ -724,6 +761,93 @@ const pickVariant = (seed: number, slot: string, variants: string[]) => {
     return ''
   }
   return variants[mixSeed(seed, slot) % variants.length]!
+}
+
+const formalObservationProfiles: Record<
+  FormalObservationProfileId,
+  Omit<FormalObservationProfile, 'pluralDamageLabel'>
+> = {
+  surveyed: {
+    id: 'surveyed',
+    enemyShipLimit: 4,
+    damageCountMode: 'exact',
+    damageDetailLimit: 6,
+    nodeDamageMode: 'observed',
+    planeCountMode: 'exact',
+  },
+  field_summary: {
+    id: 'field_summary',
+    enemyShipLimit: 2,
+    damageCountMode: 'salience',
+    damageDetailLimit: 4,
+    nodeDamageMode: 'summary',
+    planeCountMode: 'bounded',
+  },
+  fragmentary: {
+    id: 'fragmentary',
+    enemyShipLimit: 0,
+    damageCountMode: 'summary',
+    damageDetailLimit: 2,
+    nodeDamageMode: 'deferred',
+    planeCountMode: 'coarse',
+  },
+}
+
+const buildFormalObservationProfile = (
+  context: ReportRenderContext,
+  seed: number,
+): FormalObservationProfile => {
+  let fogScore = mixSeed(seed, 'formal_after_action:observationProfile') % 100
+  fogScore += Math.min(5, Math.max(0, context.nodeCount - 1)) * 2
+  fogScore += context.sawAirAttack ? 5 : 0
+  fogScore += isAnyFailedSortie(context) ? 7 : 0
+  fogScore += context.damageSeverity === 'heavy' ? 3 : 0
+  fogScore -= context.kind === 'practice' ? 10 : 0
+  fogScore -= context.nodeCount <= 1 ? 5 : 0
+
+  const id: FormalObservationProfileId =
+    fogScore < 25 ? 'surveyed' : fogScore < 75 ? 'field_summary' : 'fragmentary'
+
+  return {
+    ...formalObservationProfiles[id],
+    pluralDamageLabel:
+      mixSeed(seed, 'formal_after_action:observationProfile:pluralDamage') % 2 === 0
+        ? '若干'
+        : '数隻',
+  }
+}
+
+const formatFormalObservedPlaneCount = (
+  value: number,
+  profile: FormalObservationProfile,
+  seed: number,
+  slot: string,
+) => {
+  const exact = Math.max(1, Math.floor(value))
+  if (profile.planeCountMode === 'exact' || exact < 10) {
+    return formatExactPlaneCount(exact)
+  }
+
+  const lower = Math.max(10, Math.floor(exact / 10) * 10)
+  const upper = Math.max(lower, Math.ceil(exact / 10) * 10)
+
+  if (profile.planeCountMode === 'bounded') {
+    const rounded = roundUp10(exact)
+    return pickVariant(seed, `formal_after_action:observedPlaneCount:${slot}`, [
+      `約${toFormalKansuji(rounded)}機`,
+      lower === upper
+        ? `約${toFormalKansuji(exact)}機`
+        : `${toFormalKansuji(lower)}乃至${toFormalKansuji(upper)}機`,
+    ])
+  }
+
+  if (exact < 20) {
+    return exact === 10 ? '約十機' : '十数機'
+  }
+
+  return exact === lower
+    ? `約${toFormalKansuji(exact)}機`
+    : `${toFormalKansuji(lower)}余機`
 }
 
 const uniqueFamilies = <T extends { id: string }>(families: Array<T | null | undefined | false>) => {
@@ -939,14 +1063,27 @@ const buildPublicBodyLead = (
   context: ReportRenderContext,
   style: WarReportStyle,
   seed: number,
-) =>
-  pickVariant(seed, `${style}:bodyLead`, [
+) => {
+  const flagshipDisplay = context.flagshipDisplay ?? '不詳'
+  const flagshipClause = context.flagshipTypeDisplay
+    ? `${context.flagshipTypeDisplay}「${flagshipDisplay}」ヲ旗艦トシ`
+    : context.flagshipDisplay
+      ? `「${flagshipDisplay}」ヲ旗艦トシ`
+      : `旗艦「${flagshipDisplay}」ノ下ニ`
+
+  return pickVariant(seed, `${style}:bodyLead`, [
     context.compositionSentence,
-    `当時我部隊兵力ハ、${context.friendlySummary}ヲ基幹トシ、旗艦「${
-      context.flagshipDisplay ?? '不詳'
-    }」ノ下ニ整斉ナル作戦行動ヲ継続セリ。`,
+    `当時我部隊兵力ハ、${context.friendlySummary}ヲ基幹トシ、${flagshipClause}、整斉ナル作戦行動ヲ継続セリ。`,
     `我部隊ハ、${context.friendlySummary}ヲ以テ編成セラレ、各艦相互ニ緊密ナル協同ヲ保持セリ。`,
   ])
+}
+
+const buildFormalFlagshipListing = (context: ReportRenderContext) => {
+  const flagshipDisplay = context.flagshipDisplay ?? '不詳'
+  return context.flagshipTypeDisplay
+    ? `旗艦、${context.flagshipTypeDisplay}「${flagshipDisplay}」`
+    : `旗艦「${flagshipDisplay}」`
+}
 
 const selectDistinguishedCredit = (
   context: ReportRenderContext,
@@ -2595,16 +2732,18 @@ const buildFormalSubject = (context: ReportRenderContext) => {
 const buildFormalEnemySummary = (
   battle: BattleNodeCapture | BattleCapture,
   context: ReportRenderContext,
+  profile: FormalObservationProfile,
 ) => {
   const enemyDeck = battle.enemyDeckNameRaw?.trim()
-  const enemyShips = battle.enemyShipNamesRaw.filter(Boolean).slice(0, 4)
+  const observedEnemyShips = battle.enemyShipNamesRaw.filter(Boolean)
+  const enemyShips = observedEnemyShips.slice(0, profile.enemyShipLimit)
   const enemyLine = enemyDeck || buildEncounterObject(context)
 
-  if (enemyShips.length === 0) {
+  if (profile.enemyShipLimit === 0 || enemyShips.length === 0) {
     return `${enemyLine}。個艦細目未詳。`
   }
 
-  return `${enemyLine}。確認艦種 ${enemyShips.join('、')}${battle.enemyShipNamesRaw.length > 4 ? ' 他' : ''}。`
+  return `${enemyLine}。確認艦種 ${enemyShips.join('、')}${observedEnemyShips.length > enemyShips.length ? ' 他' : ''}。`
 }
 
 const parseNodeNumber = (battle: BattleNodeCapture) => {
@@ -2665,47 +2804,61 @@ const buildFormalEnemySummaryFamilies = () =>
     },
   ])
 
-const buildFormalEngagementFamilies = () => [
-  {
-    id: 'formal-engagement-contact',
-    airVariants: [
-      '水上及航空協同ノ下ニ交戦。細目未詳。',
-      '航空情況下ニ接敵、交戦継続。細目未詳。',
-      '敵部隊ト接触、航空関係ヲ伴ヒ交戦。細目未詳。',
-    ],
-    surfaceVariants: [
-      '敵前衛部隊ト接触、水上交戦実施。細目未詳。',
-      '敵部隊ト接触、交戦継続。砲雷戦細目未詳。',
-      '通常水上交戦。細目未詳。',
-    ],
-  },
-  {
-    id: 'formal-engagement-brief',
-    airVariants: [
-      '航空関係細目未詳。砲雷戦経過概略把握ニ止マル。',
-      '航空関係ヲ伴フ交戦。砲雷戦細目未詳。',
-      '航空情況下ノ交戦経過、概略把握ニ止マル。',
-    ],
-    surfaceVariants: [
-      '砲雷戦経過概略把握ニ止マル。',
-      '交戦継続。砲雷戦細目未詳。',
-      '水上交戦経過、概略把握ニ止マル。',
-    ],
-  },
-  {
-    id: 'formal-engagement-orderly',
-    airVariants: [
-      '航空関係ヲ伴フ交戦実施。処置概ネ整然、細目未詳。',
-      '航空情況下ニ於ケル交戦。経過概略整然タリ。',
-      '航空関与ノ下ニ交戦。記録概略ニ止マル。',
-    ],
-    surfaceVariants: [
-      '水上交戦実施。処置概ネ整然、細目未詳。',
-      '敵部隊ト接触後、交戦経過概略整然タリ。',
-      '通常交戦実施。記録概略ニ止マル。',
-    ],
-  },
-] satisfies FormalEngagementFamily[]
+const buildFormalEngagementFamilies = (profile: FormalObservationProfile) =>
+  [
+    profile.id === 'surveyed' && {
+      id: 'formal-engagement-surveyed',
+      airVariants: [
+        '航空攻撃下ニ接敵、対空戦闘ヲ実施。経過概ネ判明。',
+        '敵航空兵力ト交戦、各艦協同シ之ニ対処。',
+        '航空関係ヲ伴フ交戦実施。主要経過概ネ判明。',
+      ],
+      surfaceVariants: [
+        '敵部隊ト接触、砲雷戦ヲ実施。主要経過概ネ判明。',
+        '水上交戦ヲ実施、各艦協同シ之ニ対処。',
+        '通常水上戦闘ヲ実施。戦闘経過概ネ判明。',
+      ],
+    },
+    profile.id === 'field_summary' && {
+      id: 'formal-engagement-contact',
+      airVariants: [
+        '水上及航空協同ノ下ニ交戦。細目未詳。',
+        '航空情況下ニ接敵、交戦継続。細目未詳。',
+        '敵部隊ト接触、航空関係ヲ伴ヒ交戦。細目未詳。',
+      ],
+      surfaceVariants: [
+        '敵前衛部隊ト接触、水上交戦実施。細目未詳。',
+        '敵部隊ト接触、交戦継続。砲雷戦細目未詳。',
+        '通常水上交戦。細目未詳。',
+      ],
+    },
+    profile.id === 'fragmentary' && {
+      id: 'formal-engagement-brief',
+      airVariants: [
+        '航空関係細目未詳。砲雷戦経過概略把握ニ止マル。',
+        '航空関係ヲ伴フ交戦。砲雷戦細目未詳。',
+        '航空情況下ノ交戦経過、概略把握ニ止マル。',
+      ],
+      surfaceVariants: [
+        '砲雷戦経過概略把握ニ止マル。',
+        '交戦継続。砲雷戦細目未詳。',
+        '水上交戦経過、概略把握ニ止マル。',
+      ],
+    },
+    profile.id === 'field_summary' && {
+      id: 'formal-engagement-orderly',
+      airVariants: [
+        '航空関係ヲ伴フ交戦実施。処置概ネ整然、細目未詳。',
+        '航空情況下ニ於ケル交戦。経過概略整然タリ。',
+        '航空関与ノ下ニ交戦。記録概略ニ止マル。',
+      ],
+      surfaceVariants: [
+        '水上交戦実施。処置概ネ整然、細目未詳。',
+        '敵部隊ト接触後、交戦経過概略整然タリ。',
+        '通常交戦実施。記録概略ニ止マル。',
+      ],
+    },
+  ].filter((family): family is FormalEngagementFamily => Boolean(family))
 
 const buildFormalFindingsFamilies = (context: ReportRenderContext) =>
   uniqueFamilies<TextFamily>([
@@ -2759,11 +2912,74 @@ const buildFormalFindingsFamilies = (context: ReportRenderContext) =>
     },
   ])
 
+type FormalDamageCategory = 'heavy' | 'moderate' | 'light'
+
+const formatFormalDamageCount = (
+  count: number,
+  category: FormalDamageCategory,
+  profile: FormalObservationProfile,
+) => {
+  if (count <= 0) {
+    return 'ナシ'
+  }
+  if (count === 1) {
+    return '一隻'
+  }
+  if (profile.damageCountMode === 'exact') {
+    return `${toFormalKansuji(count)}隻`
+  }
+  if (count >= 4) {
+    return '多数'
+  }
+  if (
+    profile.damageCountMode === 'salience' &&
+    (category === 'heavy' || (category === 'moderate' && count <= 2))
+  ) {
+    return `${toFormalKansuji(count)}隻`
+  }
+  return profile.pluralDamageLabel
+}
+
+const buildFormalDamageDetail = (
+  context: ReportRenderContext,
+  profile: FormalObservationProfile,
+) => {
+  const entries = context.friendlyFleet
+    .map((ship) => ({
+      ship,
+      state: getDamageStateLabel(ship),
+    }))
+    .filter(({ ship, state }) =>
+      context.kind === 'practice'
+        ? ship.endHp != null && ship.endHp < ship.startHp
+        : state != null,
+    )
+    .map(({ ship, state }) =>
+      `${normalizeFriendlyReportName(ship.nameJa)}${state ? `(${state})` : ''}`,
+    )
+
+  if (entries.length === 0) {
+    return sanitizeDamageDetail(context.damageDetail)
+  }
+
+  const visible = entries.slice(0, profile.damageDetailLimit)
+  if (profile.id === 'fragmentary') {
+    return `主要損傷艦 ${visible.join('、')}。損傷細目整理中。`
+  }
+
+  return `${visible.join('、')}${entries.length > visible.length ? ' 他' : ''}`
+}
+
 const buildFormalDamageSummaryLines = (
   context: ReportRenderContext,
+  profile: FormalObservationProfile,
   sectionLabel = '六',
 ) => {
-  if (!hasNonTrivialDamage(context)) {
+  if (context.damageSeverity === 'unknown') {
+    return [`${sectionLabel}、被害。`, '　我方損害　細目未詳。判明次第後報ス。']
+  }
+
+  if (context.damageSeverity === 'none') {
     return [`${sectionLabel}、被害。`, '　我方損害ナシ。各艦航行並戦闘能力ニ著変ナシ。']
   }
 
@@ -2772,10 +2988,10 @@ const buildFormalDamageSummaryLines = (
 
   return [
     `${sectionLabel}、被害。`,
-    `　大破艦　${formatCountLabel(context.heavyDamageCount)}`,
-    `　中破艦　${formatCountLabel(context.moderateDamageCount)}`,
-    `　軽微損傷艦　${formatCountLabel(Math.max(0, lightDamageCount))}`,
-    `　摘要　${sanitizeDamageDetail(context.damageDetail)}`,
+    `　大破艦　${formatFormalDamageCount(context.heavyDamageCount, 'heavy', profile)}`,
+    `　中破艦　${formatFormalDamageCount(context.moderateDamageCount, 'moderate', profile)}`,
+    `　軽微損傷艦　${formatFormalDamageCount(Math.max(0, lightDamageCount), 'light', profile)}`,
+    `　摘要　${buildFormalDamageDetail(context, profile)}`,
   ]
 }
 
@@ -2806,18 +3022,16 @@ const buildFormalEngagementOverview = (
   index: number,
   family: FormalEngagementFamily,
   seed: number,
-) =>
-  battle.sawAirAttack
-    ? pickVariant(
-        seed,
-        `formal_after_action:engagementOverview:${family.id}:air:${parseNodeNumber(battle) ?? index + 1}`,
-        family.airVariants,
-      )
-    : pickVariant(
-        seed,
-        `formal_after_action:engagementOverview:${family.id}:surface:${parseNodeNumber(battle) ?? index + 1}`,
-        family.surfaceVariants,
-      )
+) => {
+  const mode = battle.sawAirAttack ? 'air' : 'surface'
+  const variants = battle.sawAirAttack ? family.airVariants : family.surfaceVariants
+  if (variants.length === 0) {
+    return ''
+  }
+
+  const start = mixSeed(seed, `formal_after_action:engagementOverview:${family.id}:${mode}`)
+  return variants[(start + index) % variants.length]!
+}
 
 const buildFormalResultSentenceFromRank = (
   battle: BattleNodeCapture,
@@ -2912,14 +3126,33 @@ const buildFormalOwnDamageSentence = (
   context: ReportRenderContext,
   index: number,
   seed: number,
+  profile: FormalObservationProfile,
 ) => {
+  if (battle.damageSummary.severity === 'unknown') {
+    return profile.nodeDamageMode === 'deferred'
+      ? '被害細目後報。'
+      : '被害ノ有無、目下確認中。'
+  }
+
   if (battle.damageSummary.severity !== 'none') {
-    return sanitizeDamageDetail(battle.damageSummary.detail)
+    if (profile.nodeDamageMode === 'observed') {
+      return sanitizeDamageDetail(battle.damageSummary.detail)
+    }
+    if (profile.nodeDamageMode === 'summary') {
+      return battle.damageSummary.severity === 'light'
+        ? '軽微損傷艦アリ。節別判定未詳。'
+        : '被害アリ。節別判定未詳。'
+    }
+    return '損傷細目後報。'
   }
 
   if (hasNonTrivialDamage(context)) {
-    if (context.nodeCount <= 1) {
+    if (context.nodeCount <= 1 && profile.nodeDamageMode === 'observed') {
       return sanitizeDamageDetail(context.damageDetail)
+    }
+
+    if (profile.nodeDamageMode === 'deferred') {
+      return context.damageSeverity === 'light' ? '軽度損傷アリ。細目後報。' : '被害細目後報。'
     }
 
     return pickVariant(
@@ -2941,6 +3174,10 @@ const buildFormalOwnDamageSentence = (
     )
   }
 
+  if (profile.nodeDamageMode === 'deferred') {
+    return '現在迄被害報告ナシ。'
+  }
+
   return pickVariant(
     seed,
     `formal_after_action:nodeDamage:none:${parseNodeNumber(battle) ?? index + 1}`,
@@ -2954,21 +3191,22 @@ const buildFormalNodeLines = (
   context: ReportRenderContext,
   engagementFamily: FormalEngagementFamily,
   seed: number,
+  profile: FormalObservationProfile,
 ) => {
   const lines = [
     buildFormalNodeLabel(battle, index),
     `　交戦時刻　${toJapaneseTime(battle.occurredAt)}`,
-    `　敵情　${buildFormalEnemySummary(battle, context)}`,
+    `　敵情　${buildFormalEnemySummary(battle, context, profile)}`,
     `　交戦結果　${buildFormalResultSentenceFromRank(battle, index, seed)}`,
     `　交戦概要　${buildFormalEngagementOverview(battle, index, engagementFamily, seed)}`,
-    `　我方被害　${buildFormalOwnDamageSentence(battle, context, index, seed)}`,
+    `　我方被害　${buildFormalOwnDamageSentence(battle, context, index, seed, profile)}`,
   ]
 
-  const antiAirSentence = buildFormalAntiAirSentence(battle)
+  const antiAirSentence = buildFormalAntiAirSentence(battle, profile, seed, index)
   if (antiAirSentence) {
     lines.push(antiAirSentence)
   }
-  const enemyFlagshipSunkSentence = buildFormalEnemyFlagshipSunkSentence(battle)
+  const enemyFlagshipSunkSentence = buildFormalEnemyFlagshipSunkSentence(battle, profile)
   if (enemyFlagshipSunkSentence) {
     lines.push(enemyFlagshipSunkSentence)
   }
@@ -2983,9 +3221,12 @@ const buildFormalPracticeBody = (
   missionOverview: string,
   enemySummaryLabel: string,
   findingsText: string,
+  profile: FormalObservationProfile,
 ) => {
   const source = truthSource
-  const enemySummary = source ? buildFormalEnemySummary(source, context) : '対抗部隊細目未詳。'
+  const enemySummary = source
+    ? buildFormalEnemySummary(source, context, profile)
+    : '対抗部隊細目未詳。'
   const lines = [
     addressSnapshot.senderLine,
     addressSnapshot.recipientLine,
@@ -2996,13 +3237,13 @@ const buildFormalPracticeBody = (
     `　${toJapaneseDate(context.occurredAt)}、対抗演習ヲ実施セリ。`,
     `　${missionOverview}`,
     '二、参加兵力。',
-    `　${context.friendlySummary}。旗艦「${context.flagshipDisplay ?? '不詳'}」。`,
+    `　${context.friendlySummary}。${buildFormalFlagshipListing(context)}。`,
     '三、敵情。',
     `　${enemySummaryLabel}　${enemySummary}`,
     '四、経過。',
     `　${context.practiceOpponent ?? '対抗部隊'}ト交戦。交戦結果　${buildFormalOverallResultSentence(context)}`,
     `　演習戦闘実施。砲雷戦細目未詳。`,
-    ...buildFormalDamageSummaryLines(context, '五'),
+    ...buildFormalDamageSummaryLines(context, profile, '五'),
     '六、所見。',
     ...buildFormalFindings(context, findingsText),
     '',
@@ -3021,6 +3262,7 @@ const buildFormalSortieBody = (
   engagementFamily: FormalEngagementFamily,
   findingsText: string,
   seed: number,
+  profile: FormalObservationProfile,
 ) => {
   const battles = truthSource?.kind === 'sortie' ? truthSource.sortie.battles : []
   const lines = [
@@ -3033,7 +3275,7 @@ const buildFormalSortieBody = (
     `　${toJapaneseDate(context.occurredAt)}、${context.operationPhrase}方面ニ於テ行動。`,
     `　${missionOverview}`,
     '二、参加兵力。',
-    `　${context.friendlySummary}。旗艦「${context.flagshipDisplay ?? '不詳'}」。`,
+    `　${context.friendlySummary}。${buildFormalFlagshipListing(context)}。`,
     '三、敵情。',
     `　${enemySummaryLabel}　${buildEncounterObject(context)}。`,
     `　交戦点数　${toFormalKansuji(Math.max(context.nodeCount, 1))}。`,
@@ -3044,7 +3286,10 @@ const buildFormalSortieBody = (
     lines.push('　交戦細目未詳。')
   } else {
     battles.forEach((battle, index) => {
-      lines.push(...buildFormalNodeLines(battle, index, context, engagementFamily, seed), '')
+      lines.push(
+        ...buildFormalNodeLines(battle, index, context, engagementFamily, seed, profile),
+        '',
+      )
     })
     if (lines.at(-1) === '') {
       lines.pop()
@@ -3053,13 +3298,13 @@ const buildFormalSortieBody = (
 
   lines.push('五、戦果。')
   lines.push(`　戦果総括　${buildFormalOverallResultSentence(context)}`)
-  const carrierAirLossSentence = buildFormalCarrierAirLossSentence(truthSource, seed)
+  const carrierAirLossSentence = buildFormalCarrierAirLossSentence(truthSource, seed, profile)
   if (carrierAirLossSentence) {
     lines.push(carrierAirLossSentence)
   }
   lines.push(`　敵情総括　${buildEncounterObject(context)}。`)
   lines.push(`　行動総括　${buildFormalActionSummary(context)}`)
-  lines.push(...buildFormalDamageSummaryLines(context, '六'))
+  lines.push(...buildFormalDamageSummaryLines(context, profile, '六'))
   lines.push('七、所見。')
   lines.push(...buildFormalFindings(context, findingsText, truthSource))
   lines.push('', '以上')
@@ -3415,6 +3660,8 @@ const buildFormalAfterAction = (
   const mainNarrative = selectMainNarrative(context, tags, fingerprint)
   const recentSelections = getRecentSelections(options, 'formal_after_action')
   const slotFamilies: Record<string, string> = {}
+  const observationProfile = buildFormalObservationProfile(context, fingerprint)
+  slotFamilies.observationProfile = observationProfile.id
   const addressSnapshot = options.addressSnapshot ?? {
     senderLine: '発：出撃艦隊提督',
     recipientLine: '宛：聯合艦隊司令部',
@@ -3443,10 +3690,10 @@ const buildFormalAfterAction = (
       fingerprint,
       'formal_after_action',
       'engagementOverview',
-      buildFormalEngagementFamilies(),
+      buildFormalEngagementFamilies(observationProfile),
       recentSelections,
       slotFamilies,
-    ) ?? buildFormalEngagementFamilies()[0]
+    ) ?? buildFormalEngagementFamilies(observationProfile)[0]
   const findingsFamily = selectFamily(
     fingerprint,
     'formal_after_action',
@@ -3479,6 +3726,7 @@ const buildFormalAfterAction = (
               `formal_after_action:findings:${findingsFamily?.id ?? 'fallback'}`,
               findingsFamily?.variants ?? ['処置概ネ適切ナリ。'],
             ),
+            observationProfile,
           )
         : buildFormalSortieBody(
             context,
@@ -3501,6 +3749,7 @@ const buildFormalAfterAction = (
               findingsFamily?.variants ?? ['処置概ネ適切ナリ。'],
             ),
             fingerprint,
+            observationProfile,
           ),
     selectionSnapshot: buildSelectionSnapshot(
       'formal_after_action',

@@ -1,5 +1,47 @@
 # Patch Notes
 
+## 0.4.16
+
+This release gives `硬派詳報` a deterministic field-observation layer. The report
+still cannot lie or borrow public propaganda multipliers, but it no longer writes
+like an omniscient database dump. The exact capture remains in the truth layer;
+the document may sound surveyed, field-summarized, or fragmentary.
+
+この release は `硬派詳報` に deterministic な現場観測 layer を加えます。詳報は嘘を
+つかず、public propaganda multiplier も借りませんが、全知の database dump のようにも
+書きません。exact capture は truth layer に残し、文書は判明、概報、断片的の三口径を
+取り得ます。
+
+### Changed
+
+- `硬派詳報`
+  - selects one `surveyed`, `field_summary`, or `fragmentary` observation profile per report and stores that selection in the existing render snapshot
+  - renders enemy aircraft losses as exact, bounded approximate, or coarse truth-bounded counts without public inflation
+  - varies own-damage counts between exact numbers, `若干` / `数隻`, and `多数` according to one coherent report-wide profile
+  - lists four, two, or zero individual enemy ships according to that same profile
+  - varies enemy flagship sinking wording between confirmed and field-assessed forms while preserving the actual sunk-signal requirement and friendly-attribution boundary
+  - treats genuinely unknown damage as pending confirmation instead of no damage
+- `参加兵力 / 旗艦`
+  - named friendly flagships now include their broad formal ship type in report prose
+  - game-specific `高速戦艦` and `航空戦艦` labels normalize to `戦艦` only for the named flagship; fleet composition summaries retain their observed game categories
+  - flagships do not gain class-name prefixes; class wording remains for class-wide technical description or enemy identification
+- `runtime and storage`
+  - no history schema change
+  - no battle-parser expansion
+  - no LLM or network dependency
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand src/__tests__/report.spec.ts
+npm test -- --runInBand
+npm run typeCheck
+npm pack --dry-run
+git diff --check
+```
+
 ## 0.4.15
 
 This release makes `標準公報` behave more like a historical headquarters announcement and newspaper-ready public claim board. It remains deterministic, lightweight, and entirely without an LLM: existing truth signals supply the premise, while the public renderer supplies the audacity.

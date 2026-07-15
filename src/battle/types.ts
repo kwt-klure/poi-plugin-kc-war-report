@@ -258,7 +258,9 @@ export type ReportRenderContext = {
   openingEnemyClause: string
   resultPhrase: string
   friendlySummary: string
+  friendlyFleet: FleetShipSnapshot[]
   flagshipDisplay: string | null
+  flagshipTypeDisplay: string | null
   mvpDisplay: string | null
   damageSeverity: DamageSeverity
   damageLabel: string
