@@ -23,6 +23,12 @@ KC War Report は、艦これを素材にした **ローカル文体 / 情報 / 
 battle analyzer、replay viewer、史実 simulator ではありません。plugin が安全に
 把握できる事実を、戦時文書の声へ書き換えるための玩具です。
 
+The toy comes first. Accuracy supplies the premise; the public voices turn that
+premise into an entertaining headquarters announcement without an LLM.
+
+この plugin はまず玩具です。accuracy は材料の根を支え、public voice はその材料を
+LLM なしで愉快な大本営発表へ編成します。
+
 ## Design Principle
 
 The core rule is simple:
@@ -194,6 +200,32 @@ defense, carrier-air loss, or enemy flagship sinking.
 です。防空戦果、敵艦載機喪失、敵旗艦撃沈を知っているのに、generic な勝利文へ戻る
 べきではありません。
 
+`標準公報` chooses public claims in this order: enemy flagship sinking, enemy
+carrier aircraft loss, numeric anti-air success, transport, submarine, air,
+main force, then generic copy. Two or more concrete claims become a numbered
+`現在迄ニ判明セル戦果` inventory; one remains a single sentence.
+
+Public aircraft counts are deterministic rhetoric, not measurements. One saved
+report may say `百四十余機`, `約百四十機`, `百二十乃至百六十機`, or
+`百四十機（内不確実三十機）`; the chosen wording is reused wherever that claim
+appears in the same report.
+
+`標準公報` は、敵旗艦撃沈、敵母艦艦載機喪失、数値付き防空戦果、輸送、潜水、航空、
+主力、generic の順に材料を選びます。具体的戦果が二件以上なら
+`現在迄ニ判明セル戦果` の numbered inventory にし、一件だけなら従来どおり単独句に
+します。
+
+public aircraft count は測定値ではなく deterministic な公報口径です。一つの保存済み
+report は `百四十余機`、`約百四十機`、`百二十乃至百六十機`、または
+`百四十機（内不確実三十機）` の一つを選び、同じ report 内では同じ表現を使います。
+
+When a sortie fails, `標準公報` still announces that the prescribed objective was
+achieved and the force transferred elsewhere. `短報` remains an unqualified
+victory notice, while `硬派詳報` records damage and withdrawal truthfully.
+
+sortie が失敗した場合も、`標準公報` は所定目的の達成と他方面への転進を発表します。
+`短報` はなお無条件の大捷を宣し、`硬派詳報` だけが損害と離脱を照実に記録します。
+
 ### What It Does Not Do
 
 KC War Report intentionally does not:
@@ -201,7 +233,7 @@ KC War Report intentionally does not:
 - store full raw API packets in history
 - become a full battle viewer
 - infer shell, torpedo, or shot-by-shot detail
-- output exact counts it cannot verify
+- invent exact counts in the truth-first `硬派詳報`
 - treat heavy damage as sinking
 - infer enemy flagship sinking from S-rank alone
 - assign enemy flagship sinking to a friendly ship without attacker attribution
@@ -212,7 +244,7 @@ KC War Report は意図的に以下をしません。
 - full raw API packet を history に保存しない
 - 完全な battle viewer にならない
 - 砲撃、雷撃、一手ごとの detail を推論しない
-- 確認不能な exact count を出さない
+- truth-first の `硬派詳報` で確認不能な exact count を捏造しない
 - 大破を撃沈扱いしない
 - S 勝だけから敵旗艦撃沈を推論しない
 - attacker attribution なしに敵旗艦撃沈を特定の友軍艦へ割り当てない
@@ -234,14 +266,21 @@ phrasing family を選びます。
 ```text
 大本営海軍部発表
 
-令和八年三月十四日
+令和八年五月二十六日
 
-ブルネイ泊地沖方面、敵潜航企図ヲ挫折
+タウイタウイ泊地沖方面作戦、敵旗艦「戦艦レ級」ヲ撃沈
 
-敵潜航兵力ニ打撃ヲ与ヘ、大ナル戦果ヲ収メタリ
+敵旗艦「戦艦レ級」撃沈ニ依リ敵指揮系統ヲ混乱セシム
 
-帝国海軍出撃部隊ハ、同方面ニ於テ敵潜航兵力ノ蠢動ヲ察知シ、直ニ之ヲ邀撃セリ。
-敵潜航企図ヲ挫折セシメ、海上交通保全ノ目的ヲ概ネ達成セリ。
+帝国海軍出撃部隊ハ、同方面ニ於テ敵主力部隊ト接触シ、直ニ之ヲ邀撃セリ。
+敵主力企図ヲ挫折セシメタリ。
+
+現在迄ニ判明セル戦果概ネ左ノ如シ。
+一、敵旗艦「戦艦レ級」ヲ撃沈、敵戦列ヲ潰乱セシメタリ。
+二、敵母艦群損失ニ伴ヒ、艦載機約二百機喪失セリ。
+三、殊ニ「初月」ノ防空戦闘鋭甚ニシテ、敵機約百四十機ヲ撃滅セリ。
+
+「初月」ノ防空奮戦、殊勲ト認ム。
 
 大本営海軍部ハ本行動ノ成果ヲ公表ス。
 ```
@@ -309,7 +348,7 @@ phrasing family を選びます。
 ```
 
 ```text
-殊ニ「初月」ノ防空戦闘鋭甚ニシテ、敵機百四十余機ヲ撃滅セリ。
+殊ニ「初月」ノ防空戦闘鋭甚ニシテ、敵機百二十乃至百六十機ヲ撃滅セリ。
 ```
 
 ```text
@@ -325,7 +364,7 @@ phrasing family を選びます。
 ```
 
 ```text
-敵母艦群損失ニ伴ヒ、艦載機二百余機喪失セリ。
+敵母艦群損失ニ伴ヒ、艦載機二百機（内不確実四十機）喪失セリ。
 ```
 
 ```text
@@ -403,7 +442,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.14.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.15.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update

@@ -280,8 +280,7 @@ describe('war report sortie architecture', () => {
     )
 
     expect(failed.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
-    expect(failed.body).toMatch(/成果|戦果|敵企図/)
-    expect(failed.body).not.toMatch(/転進|反転|離脱/)
+    expect(failed.body).toMatch(/目的.*転進/)
     expect(failed.body).not.toContain('敵機')
   })
 
@@ -477,7 +476,9 @@ describe('war report sortie architecture', () => {
 
     expect(formal.body).toContain('防空戦果')
     expect(formal.body).toContain('「初月」防空射撃ニ当リ、敵機計五十三機ヲ撃墜。')
-    expect(standard.body).toContain('「初月」ノ防空戦闘鋭甚ニシテ、敵機百四十余機ヲ撃滅セリ。')
+    expect(standard.body).toMatch(
+      /「初月」ノ防空戦闘鋭甚ニシテ、敵機(?:百四十余機|約百四十機|百二十乃至百六十機|百四十機（内不確実三十機）)ヲ撃滅セリ。/,
+    )
     expect(short.body).toMatch(
       /敵艦載機三百余機、母艦諸共喪失。|敵航空兵力三百余機壊滅。|敵艦載機三百余機海没。/,
     )
@@ -486,9 +487,7 @@ describe('war report sortie architecture', () => {
     expect(formal.body).toMatch(
       /敵空母損失ニ伴ヒ、搭載敵機計百十八機喪失ト認ム。|敵空母被害ニ伴ヒ、敵航空兵力亦大損耗ヲ生ジ、搭載敵機計百十八機喪失ト認ム。/,
     )
-    expect(standard.body).toMatch(
-      /敵艦載機二百余機亦海中ニ葬レリ。|敵母艦群損失ニ伴ヒ、艦載機二百余機喪失セリ。|敵航空戦力亦同時ニ二百余機ヲ失ヒ大損害ヲ受ケタリ。/,
-    )
+    expect(standard.body).toMatch(/敵艦載機|敵母艦群損失|敵航空戦力亦同時ニ/)
 
     for (const text of [`${formal.bulletin}\n${formal.body}`, `${standard.bulletin}\n${standard.body}`, `${short.bulletin}\n${short.body}`]) {
       expect(text).not.toContain('対空CI')
@@ -502,7 +501,92 @@ describe('war report sortie architecture', () => {
     }
   })
 
-  it('lets high anti-air credit outrank MVP in formal distinguished-ship findings', () => {
+  it('uses deterministic historical count forms and reuses one count within a standard bulletin', () => {
+    const antiAirOnlySortie: SortieSessionCapture = {
+      ...antiAirSortieSession,
+      id: 'sortie-aa-public-count-forms',
+      battles: [
+        {
+          ...antiAirBattle,
+          carrierAirLossSummary: null,
+        },
+      ],
+    }
+    const record = normalizeSortieSession(antiAirOnlySortie, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: antiAirOnlySortie,
+    }
+    const observedForms = new Set<string>()
+
+    for (let variantSeed = 0; variantSeed < 32; variantSeed += 1) {
+      const standard = buildWarReportFromRecord(record, 'standard_bulletin', {
+        truthSource,
+        variantSeed,
+      })
+      const count = standard.body.match(/敵機(.+?)ヲ撃滅セリ。/)?.[1]
+
+      expect(count).toBeTruthy()
+      observedForms.add(count!)
+      if (standard.bulletin.includes('敵機')) {
+        expect(standard.bulletin).toContain(count!)
+      }
+
+      const repeated = buildWarReportFromRecord(record, 'standard_bulletin', {
+        truthSource,
+        variantSeed,
+      })
+      expect(repeated).toEqual(standard)
+    }
+
+    expect(observedForms).toEqual(
+      new Set([
+        '百四十余機',
+        '約百四十機',
+        '百二十乃至百六十機',
+        '百四十機（内不確実三十機）',
+      ]),
+    )
+  })
+
+  it('uses an inventory only when a standard bulletin has multiple concrete claims', () => {
+    const antiAirOnlySortie: SortieSessionCapture = {
+      ...antiAirSortieSession,
+      id: 'sortie-aa-single-public-claim',
+      battles: [
+        {
+          ...antiAirBattle,
+          carrierAirLossSummary: null,
+        },
+      ],
+    }
+    const singleClaim = buildWarReportFromRecord(
+      normalizeSortieSession(antiAirOnlySortie, 'completed'),
+      'standard_bulletin',
+      {
+        truthSource: {
+          kind: 'sortie',
+          sortie: antiAirOnlySortie,
+        },
+      },
+    )
+    const noClaim = buildWarReportFromRecord(
+      normalizeSortieSession(sortieSession, 'completed'),
+      'standard_bulletin',
+      {
+        truthSource: {
+          kind: 'sortie',
+          sortie: sortieSession,
+        },
+      },
+    )
+
+    expect(singleClaim.body).toMatch(/「初月」ノ防空戦闘鋭甚ニシテ、敵機/)
+    expect(singleClaim.body).not.toContain('現在迄ニ判明セル戦果概ネ左ノ如シ。')
+    expect(noClaim.body).not.toContain('現在迄ニ判明セル戦果概ネ左ノ如シ。')
+  })
+
+  it('lets high anti-air credit outrank MVP in formal and standard distinguished credit', () => {
     const airDefenseSortie: SortieSessionCapture = {
       ...antiAirSortieSession,
       id: 'sortie-aa-distinguished',
@@ -522,9 +606,19 @@ describe('war report sortie architecture', () => {
       },
       addressSnapshot: formalAddressSnapshot,
     })
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', {
+      truthSource: {
+        kind: 'sortie',
+        sortie: airDefenseSortie,
+      },
+    })
 
     expect(formal.body).toContain('戦闘後判定ニ於テ「初月」防空戦果顕著、殊勲艦ト認定。')
     expect(formal.body).not.toContain('「矢矧」殊勲艦')
+    expect(standard.body).toMatch(
+      /「初月」ノ防空戦闘、武功顕著ナリ。|「初月」ノ防空奮戦、殊勲ト認ム。|「初月」ノ対空戦闘、特筆ニ値ス。/,
+    )
+    expect(standard.body).not.toContain('矢矧')
   })
 
   it('mentions enemy flagship sinking in all document voices without assigning it to a ship', () => {
@@ -560,6 +654,11 @@ describe('war report sortie architecture', () => {
     const allText = `${formal.body}\n${standard.body}\n${short.body}`
 
     expect(formal.body).toContain('敵旗艦「戦艦レ級」撃沈ヲ確認。')
+    expect(standard.bulletin).toContain('敵旗艦「戦艦レ級」')
+    expect(standard.body).toContain('現在迄ニ判明セル戦果概ネ左ノ如シ。')
+    expect(standard.body).toContain('一、敵旗艦「戦艦レ級」ヲ撃沈、敵戦列ヲ潰乱セシメタリ。')
+    expect(standard.body).toMatch(/二、(?:敵艦載機|敵母艦群損失|敵航空戦力亦同時ニ)/)
+    expect(standard.body).toMatch(/三、殊ニ「初月」ノ防空戦闘鋭甚ニシテ、敵機/)
     expect(standard.body).toContain('敵旗艦「戦艦レ級」ヲ撃沈、敵戦列ヲ潰乱セシメタリ。')
     expect(short.body).toContain('敵旗艦撃沈、戦果顕著。')
     expect(allText).not.toContain('「初月」敵旗艦')
@@ -626,9 +725,9 @@ describe('war report sortie architecture', () => {
       variantSeed: 2,
     })
 
-    expect(standard.bulletin).toMatch(/航空戦力|母艦群|航空企図/)
+    expect(standard.bulletin).toMatch(/航空戦力|母艦群|航空企図|艦載機/)
     expect(standard.bulletin).not.toContain('敵主力部隊ニ有効打撃ヲ與ヘタリ')
-    expect(standard.body).toMatch(/敵艦載機二百余機|敵航空攻勢ハ主戦闘前既ニ挫折セリ|敵機百四十余機ヲ撃滅セリ/)
+    expect(standard.body).toMatch(/敵艦載機|敵母艦群損失|敵航空戦力亦同時ニ|敵機/)
   })
 
   it('keeps high-glory main-force short bulletins result-first even without numeric side events', () => {
@@ -664,7 +763,7 @@ describe('war report sortie architecture', () => {
     expect(bullets[1]).toMatch(/粉砕|挫折|戦果顕著|殲滅的打撃/)
   })
 
-  it('keeps submarine-focused short bulletins coherent when anti-air success exists as a secondary highlight', () => {
+  it('promotes numeric anti-air over submarine category in shared public claim priority', () => {
     const submarineAirMixSortie: SortieSessionCapture = {
       ...antiAirSortieSession,
       id: 'sortie-submarine-focus-with-aa-highlight',
@@ -693,12 +792,11 @@ describe('war report sortie architecture', () => {
     })
     const bullets = short.body.split('\n').filter((line) => /^(一|二|三)、/.test(line))
 
-    expect(short.bulletin).toMatch(/敵潜水兵力|敵潜航企図/)
+    expect(short.bulletin).toMatch(/敵航空|敵機群/)
     expect(bullets).toHaveLength(3)
-    expect(bullets[0]).toMatch(/敵潜水兵力|敵潜航兵力|敵潜航企図/)
-    expect(bullets[1]).toMatch(/敵潜水兵力|敵潜航企図|我作戦成ル/)
-    expect(bullets[2]).toMatch(/防空戦闘鋭甚|防空奮戦|我作戦支障ナシ|敵航空企図亦挫折/)
-    expect(bullets[2]).not.toMatch(/百余機|二百余機|三百余機|五百余機|七百余機/)
+    expect(bullets[0]).toMatch(/敵航空攻勢|敵航空兵力|防空戦果/)
+    expect(bullets[1]).toMatch(/敵主力挫折|敵企図|敵部隊/)
+    expect(bullets[2]).toMatch(/「初月」奮戦、敵機百九十余機ヲ掃蕩/)
   })
 
   it('renders formal node labels with kansuji even above ten', () => {
@@ -748,7 +846,7 @@ describe('war report sortie architecture', () => {
     expect(short.body).not.toContain('敵機百')
   })
 
-  it('uses banded propaganda numbers for carrier-air-loss lines across the three document voices', () => {
+  it('keeps formal carrier counts exact while public voices use their own rhetoric bands', () => {
     const record = normalizeSortieSession(antiAirSortieSession, 'completed')
     const truthSource = {
       kind: 'sortie' as const,
@@ -763,7 +861,9 @@ describe('war report sortie architecture', () => {
     const short = buildWarReportFromRecord(record, 'short_bulletin', { truthSource })
 
     expect(formal.body).toContain('百十八機喪失ト認ム。')
-    expect(standard.body).toContain('二百余機')
+    expect(standard.body).toMatch(
+      /二百余機|約二百機|百五十乃至二百五十機|二百機（内不確実四十機）/,
+    )
     expect(short.body).toContain('三百余機')
     expect(short.body).not.toContain('二百余機')
   })
@@ -1020,8 +1120,7 @@ describe('war report sortie architecture', () => {
 
     expect(record.failureMode).toBe('failed_with_retreat')
     expect(standard.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
-    expect(standard.body).toMatch(/成果|戦果|敵企図/)
-    expect(standard.body).not.toMatch(/転進|反転|離脱/)
+    expect(standard.body).toMatch(/目的.*転進/)
     expect(formal.body).toContain('大破艦　一隻')
     expect(formal.body).toMatch(/細目未詳|概略把握/)
     expect(formal.body).toContain('戦果総括')
@@ -1057,7 +1156,7 @@ describe('war report sortie architecture', () => {
 
     expect(record.failureMode).toBe('failed_with_heavy_losses')
     expect(record.damageSummary.heavyDamageCount).toBeGreaterThanOrEqual(2)
-    expect(standard.body).toMatch(/成果|戦果|敵企図/)
+    expect(standard.body).toMatch(/目的.*転進/)
     expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/粉砕|赫々|壊滅的|殲滅的/)
     expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/損傷|損耗|損害|大破|中破/)
     expect(formal.body).toContain('大破艦　若干')
@@ -1067,6 +1166,7 @@ describe('war report sortie architecture', () => {
     expect(short.body).toContain('二、')
     expect(`${short.bulletin}\n${short.body}`).toMatch(/粉砕|赫々|圧倒|壊滅的/)
     expect(`${short.bulletin}\n${short.body}`).not.toMatch(/損傷|損耗|損害|大破|中破/)
+    expect(`${short.bulletin}\n${short.body}`).not.toMatch(/転進|反転|離脱/)
   })
 
   it('keeps standard bulletins calmer than short bulletins under the same failed sortie', () => {

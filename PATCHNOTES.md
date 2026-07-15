@@ -1,5 +1,43 @@
 # Patch Notes
 
+## 0.4.15
+
+This release makes `標準公報` behave more like a historical headquarters announcement and newspaper-ready public claim board. It remains deterministic, lightweight, and entirely without an LLM: existing truth signals supply the premise, while the public renderer supplies the audacity.
+
+この release は `標準公報` を、史実の大本営発表と新聞見出しに近い public claim board へ寄せます。deterministic、lightweight、without LLM の原則はそのままです。既存 truth signal が材料を出し、公報 renderer が面の皮を厚くします。
+
+### Changed
+
+- `標準公報`
+  - public claim priority is now enemy flagship sinking, carrier aircraft loss, numeric anti-air success, transport, submarine, air, main force, then generic copy
+  - enemy flagship, carrier aircraft loss, and anti-air success share one claim board so headline and body reuse the same evidence and count wording
+  - two or more concrete claims render as `現在迄ニ判明セル戦果` with numbered items; one remains a single sentence and zero adds no empty inventory
+  - public aircraft counts deterministically vary among `余`, `約`, `乃至`, and `内不確実` forms
+  - named anti-air credit with at least twenty confirmed enemy aircraft lost can outrank the visible MVP in public distinguished-service wording
+  - failed sorties use their own `所定目的達成` / `転進` family
+- `短報`
+  - inherits the shared public claim priority, including enemy flagship focus
+  - keeps its existing three-part dispatch structure and stronger numeric bands
+- `硬派詳報`
+  - keeps truth-first exact signals and does not use public count rhetoric
+  - enemy flagship sinking remains sortie-level credit without friendly attacker attribution
+- `runtime and storage`
+  - no new battle parser
+  - no history schema change
+  - no LLM or network dependency
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand src/__tests__/report.spec.ts
+npm test -- --runInBand
+npm run typeCheck
+npm pack --dry-run
+git diff --check
+```
+
 ## 0.4.14
 
 This release adds two small document-facing battle credit improvements.
