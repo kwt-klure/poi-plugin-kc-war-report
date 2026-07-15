@@ -6,7 +6,7 @@ reports, headquarters bulletins, and local pseudo documents.
 Poi 用の、艦これ sortie / 演習結果を IJN 風の詳報・公報・擬制文書へ変換する
 plugin です。
 
-![KC War Report GUI](assets/gui-overview.png)
+![KC War Report GUI](https://raw.githubusercontent.com/kwt-klure/poi-plugin-kc-war-report/main/assets/gui-overview.png)
 
 ## Quick View
 
@@ -411,14 +411,14 @@ That gap is the joke.
 
 この落差そのものが笑いどころです。
 
-![README live contrast example](assets/readme-live-contrast-2026-03-29.png)
+![README live contrast example](https://raw.githubusercontent.com/kwt-klure/poi-plugin-kc-war-report/main/assets/readme-live-contrast-2026-03-29.png)
 
 ## Install
 
 ### Quick Install
 
 ```bash
-npm install 'git+https://github.com/kwt-klure/poi-plugin-kc-war-report.git' --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install poi-plugin-kc-war-report --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 Then:
