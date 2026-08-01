@@ -109,6 +109,7 @@ The plugin also preserves a few kinds of useful but easy-to-miss work:
 
 - defensive anti-air events from visible `api_air_fire`
 - enemy plane loss from visible air phases
+- positive anti-submarine hits from aligned shelling-phase attacker, target, and damage arrays
 - enemy carrier aircraft-loss estimates when carrier damage and master slot data
   are available
 - enemy flagship sinking when aligned enemy HP arrays show the first enemy ship at
@@ -121,6 +122,7 @@ turning the plugin into a full battle parser.
 
 - visible `api_air_fire` からの防空戦闘 event
 - visible air phase からの敵機損失
+- aligned shelling phase から確認できる対潜攻撃の有効命中
 - 敵空母被害と master slot data が揃う場合の艦載機喪失 estimate
 - 敵 HP 配列が揃い、敵一番艦 HP がゼロになった場合の敵旗艦撃沈
 
@@ -166,10 +168,11 @@ that truth as exact, bounded, or still being collated.
 It may record:
 
 - defensive anti-air credit
+- anti-submarine contribution rendered according to the report-wide observation profile
 - exact or truth-bounded enemy plane loss when the visible source exists
 - conservative carrier-air-loss estimates
 - confirmed enemy flagship sinking
-- distinguished-ship findings based on a strong named anti-air contribution
+- distinguished-ship findings based on named anti-air and anti-submarine contribution
 - exact, approximate, or intentionally incomplete own-damage summaries
 - four, two, or zero individually listed enemy ships according to the report's
   observation profile
@@ -185,10 +188,11 @@ exact、bounded、または整理中として書き分けます。
 記録できるものは以下です。
 
 - 防空戦果
+- report-wide observation profile に応じた対潜戦果
 - source が見える場合の exact または truth-bounded な敵機損失
 - 保守的な敵艦載機喪失 estimate
 - 確認済みの敵旗艦撃沈
-- 艦名付きの強い防空戦果に基づく殊勲艦認定
+- 艦名付きの防空・対潜戦果を総合した殊勲艦認定
 - exact、概数、または intentionally incomplete な我方損害 summary
 - observation profile に応じた敵個艦細目四隻、二隻、または未詳
 
@@ -212,8 +216,8 @@ defense, carrier-air loss, or enemy flagship sinking.
 べきではありません。
 
 `標準公報` chooses public claims in this order: enemy flagship sinking, enemy
-carrier aircraft loss, numeric anti-air success, transport, submarine, air,
-main force, then generic copy. Two or more concrete claims become a numbered
+carrier aircraft loss, numeric anti-air success, observed anti-submarine success,
+transport, submarine, air, main force, then generic copy. Two or more concrete claims become a numbered
 `現在迄ニ判明セル戦果` inventory; one remains a single sentence.
 
 Public aircraft counts are deterministic rhetoric, not measurements. One saved
@@ -221,8 +225,8 @@ report may say `百四十余機`, `約百四十機`, `百二十乃至百六十�
 `百四十機（内不確実三十機）`; the chosen wording is reused wherever that claim
 appears in the same report.
 
-`標準公報` は、敵旗艦撃沈、敵母艦艦載機喪失、数値付き防空戦果、輸送、潜水、航空、
-主力、generic の順に材料を選びます。具体的戦果が二件以上なら
+`標準公報` は、敵旗艦撃沈、敵母艦艦載機喪失、数値付き防空戦果、確認できた対潜戦果、
+輸送、潜水、航空、主力、generic の順に材料を選びます。具体的戦果が二件以上なら
 `現在迄ニ判明セル戦果` の numbered inventory にし、一件だけなら従来どおり単独句に
 します。
 
@@ -243,11 +247,12 @@ KC War Report intentionally does not:
 
 - store full raw API packets in history
 - become a full battle viewer
-- infer shell, torpedo, or shot-by-shot detail
+- render a full shelling, torpedo, or shot-by-shot battle ledger
 - invent exact counts in the truth-first `硬派詳報`
 - treat heavy damage as sinking
 - infer enemy flagship sinking from S-rank alone
 - assign enemy flagship sinking to a friendly ship without attacker attribution
+- assign a submarine sinking to a friendly ship from positive ASW damage alone
 - apply public propaganda multipliers to `硬派詳報`
 - merge `硬派詳報` truth policy with propaganda logic
 
@@ -255,9 +260,10 @@ KC War Report は意図的に以下をしません。
 
 - full raw API packet を history に保存しない
 - 完全な battle viewer にならない
-- 砲撃、雷撃、一手ごとの detail を推論しない
+- 砲撃、雷撃、一手ごとの完全な battle ledger を生成しない
 - truth-first の `硬派詳報` で確認不能な exact count を捏造しない
 - 大破を撃沈扱いしない
+- 対潜有効打だけで特定艦の撃沈功を断定しない
 - S 勝だけから敵旗艦撃沈を推論しない
 - attacker attribution なしに敵旗艦撃沈を特定の友軍艦へ割り当てない
 - public propaganda multiplier を `硬派詳報` に適用しない
@@ -463,7 +469,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.16.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.17.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update

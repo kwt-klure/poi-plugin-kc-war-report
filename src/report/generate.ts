@@ -86,6 +86,7 @@ type PublicPropagandaProfile = {
 type PublicClaimFocus =
   | 'enemy_flagship_sunk'
   | 'carrier_air_loss'
+  | 'anti_submarine'
   | 'transport'
   | 'submarine_force'
   | 'anti_air_numeric'
@@ -97,6 +98,14 @@ type PublicAntiAirEvidence = {
   triggered: boolean
   shipName: string | null
   truthLoss: number | null
+}
+
+type PublicAntiSubmarineEvidence = {
+  triggered: boolean
+  shipName: string | null
+  damagingHitCount: number
+  targetCount: number
+  assessedDamage: number
 }
 
 type PublicCarrierAirLossEvidence = {
@@ -112,6 +121,7 @@ type PublicEnemyFlagshipSunkEvidence = {
 
 type PublicClaimEvidence = {
   antiAir: PublicAntiAirEvidence | null
+  antiSubmarine: PublicAntiSubmarineEvidence | null
   carrierAirLoss: PublicCarrierAirLossEvidence | null
   enemyFlagshipSunk: PublicEnemyFlagshipSunkEvidence | null
 }
@@ -120,6 +130,7 @@ type StandardConcreteClaimKind =
   | 'enemy_flagship_sunk'
   | 'carrier_air_loss'
   | 'anti_air'
+  | 'anti_submarine'
 
 type StandardClaimItem = {
   kind: StandardConcreteClaimKind
@@ -136,7 +147,13 @@ type StandardClaimBoard = {
 
 type DistinguishedCredit = {
   shipName: string
-  basis: 'anti_air_high' | 'mvp' | 'anti_air'
+  basis:
+    | 'combined_specialist'
+    | 'anti_air_high'
+    | 'anti_submarine_high'
+    | 'mvp'
+    | 'anti_air'
+    | 'anti_submarine'
 }
 
 const toJapaneseDate = (timestamp: number) => {
@@ -366,6 +383,47 @@ const toCarrierAircraftPropagandaEstimate = (
   return style === 'standard_bulletin' ? 500 : 700
 }
 
+type SortieAntiAirContribution = {
+  shipName: string
+  truthLoss: number | null
+}
+
+const buildSortieAntiAirContributions = (
+  truthSource: WarReportTruthSource | null,
+): SortieAntiAirContribution[] => {
+  if (truthSource?.kind !== 'sortie') {
+    return []
+  }
+
+  const summaries = truthSource.sortie.battles
+    .map((battle) => battle.antiAirSummary)
+    .filter((summary): summary is NonNullable<typeof summary> => summary?.triggered === true)
+
+  if (summaries.length === 0) {
+    return []
+  }
+
+  const grouped = new Map<string, SortieAntiAirContribution>()
+  for (const summary of summaries) {
+    if (!summary.shipNameRaw) {
+      continue
+    }
+    const shipName = normalizeFriendlyReportName(summary.shipNameRaw)
+    const existing = grouped.get(shipName)
+    const hasObservedLoss = existing?.truthLoss != null || summary.enemyPlaneLoss != null
+    grouped.set(shipName, {
+      shipName,
+      truthLoss: hasObservedLoss
+        ? (existing?.truthLoss ?? 0) + (summary.enemyPlaneLoss ?? 0)
+        : null,
+    })
+  }
+
+  return Array.from(grouped.values()).sort(
+    (left, right) => (right.truthLoss ?? -1) - (left.truthLoss ?? -1),
+  )
+}
+
 const buildSortieAntiAirAggregate = (truthSource: WarReportTruthSource | null) => {
   if (truthSource?.kind !== 'sortie') {
     return null
@@ -374,26 +432,87 @@ const buildSortieAntiAirAggregate = (truthSource: WarReportTruthSource | null) =
   const summaries = truthSource.sortie.battles
     .map((battle) => battle.antiAirSummary)
     .filter((summary): summary is NonNullable<typeof summary> => summary?.triggered === true)
-
   if (summaries.length === 0) {
     return null
   }
 
-  const truthLoss = summaries.some((summary) => summary.enemyPlaneLoss != null)
+  const contributions = buildSortieAntiAirContributions(truthSource)
+  const primary = contributions[0]
+  const unattributedLoss = summaries
+    .filter((summary) => !summary.shipNameRaw)
+    .reduce((sum, summary) => sum + (summary.enemyPlaneLoss ?? 0), 0)
+  const totalLoss = summaries.some((summary) => summary.enemyPlaneLoss != null)
     ? summaries.reduce((sum, summary) => sum + (summary.enemyPlaneLoss ?? 0), 0)
     : null
 
-  const primarySummary = [...summaries].sort(
-    (left, right) => (right.enemyPlaneLoss ?? -1) - (left.enemyPlaneLoss ?? -1),
-  )[0]
-
   return {
     triggered: true,
-    shipName:
-      primarySummary?.shipNameRaw != null
-        ? normalizeFriendlyReportName(primarySummary.shipNameRaw)
-        : null,
-    truthLoss: truthLoss != null && truthLoss > 0 ? truthLoss : null,
+    shipName: primary?.shipName ?? null,
+    // A named sentence uses that actor's own observed loss; anonymous summaries retain sortie total.
+    truthLoss:
+      primary?.truthLoss != null
+        ? primary.truthLoss
+        : totalLoss != null && totalLoss > 0
+          ? totalLoss
+          : unattributedLoss > 0
+            ? unattributedLoss
+            : null,
+  }
+}
+
+type SortieAntiSubmarineContribution = {
+  shipName: string | null
+  damagingHitCount: number
+  targetCount: number
+  assessedDamage: number
+}
+
+const buildSortieAntiSubmarineContributions = (
+  truthSource: WarReportTruthSource | null,
+): SortieAntiSubmarineContribution[] => {
+  if (truthSource?.kind !== 'sortie') {
+    return []
+  }
+
+  const grouped = new Map<string, SortieAntiSubmarineContribution>()
+  for (const battle of truthSource.sortie.battles) {
+    for (const contribution of battle.antiSubmarineSummary?.contributions ?? []) {
+      const shipName = contribution.shipNameRaw
+        ? normalizeFriendlyReportName(contribution.shipNameRaw)
+        : null
+      const key = shipName ?? '__unattributed__'
+      const existing = grouped.get(key)
+      grouped.set(key, {
+        shipName,
+        damagingHitCount:
+          (existing?.damagingHitCount ?? 0) + contribution.damagingHitCount,
+        targetCount: (existing?.targetCount ?? 0) + contribution.targetCount,
+        assessedDamage: (existing?.assessedDamage ?? 0) + contribution.assessedDamage,
+      })
+    }
+  }
+
+  return Array.from(grouped.values())
+    .filter((contribution) => contribution.damagingHitCount > 0)
+    .sort(
+      (left, right) =>
+        right.damagingHitCount - left.damagingHitCount ||
+        right.targetCount - left.targetCount ||
+        right.assessedDamage - left.assessedDamage,
+    )
+}
+
+const buildSortieAntiSubmarineAggregate = (truthSource: WarReportTruthSource | null) => {
+  const contributions = buildSortieAntiSubmarineContributions(truthSource)
+  if (contributions.length === 0) {
+    return null
+  }
+
+  const primaryNamed = contributions.find((contribution) => contribution.shipName != null)
+  const primary = primaryNamed ?? contributions[0]!
+  return {
+    triggered: true,
+    ...primary,
   }
 }
 
@@ -450,6 +569,7 @@ const buildPublicClaimEvidence = (
   truthSource: WarReportTruthSource | null,
 ): PublicClaimEvidence => ({
   antiAir: buildSortieAntiAirAggregate(truthSource),
+  antiSubmarine: buildSortieAntiSubmarineAggregate(truthSource),
   carrierAirLoss: buildSortieCarrierAirLossAggregate(truthSource),
   enemyFlagshipSunk: buildSortieEnemyFlagshipSunkAggregate(truthSource),
 })
@@ -469,6 +589,9 @@ const shouldUseHighGloryShortMode = (
   }
 
   const hasNumericAirClaim = (evidence.antiAir?.truthLoss ?? 0) >= 20
+  const hasAntiSubmarineClaim =
+    (evidence.antiSubmarine?.damagingHitCount ?? 0) >= 2 ||
+    (evidence.antiSubmarine?.targetCount ?? 0) >= 2
   const hasCarrierAirClaim = Boolean(evidence.carrierAirLoss?.triggered)
   const hasEnemyFlagshipClaim = Boolean(evidence.enemyFlagshipSunk?.triggered)
   const hasStrategicEnemy =
@@ -478,11 +601,15 @@ const shouldUseHighGloryShortMode = (
   const favorableResult =
     context.resultCategory === 'decisive_success' ||
     (context.resultCategory === 'success' &&
-      (hasNumericAirClaim || hasCarrierAirClaim || hasEnemyFlagshipClaim))
+      (hasNumericAirClaim || hasAntiSubmarineClaim || hasCarrierAirClaim || hasEnemyFlagshipClaim))
 
   return (
     favorableResult &&
-    (hasStrategicEnemy || hasNumericAirClaim || hasCarrierAirClaim || hasEnemyFlagshipClaim)
+    (hasStrategicEnemy ||
+      hasNumericAirClaim ||
+      hasAntiSubmarineClaim ||
+      hasCarrierAirClaim ||
+      hasEnemyFlagshipClaim)
   )
 }
 
@@ -500,6 +627,13 @@ const selectPublicClaimFocus = (
 
   if ((evidence.antiAir?.truthLoss ?? 0) >= 20) {
     return 'anti_air_numeric'
+  }
+
+  if (
+    (evidence.antiSubmarine?.damagingHitCount ?? 0) >= 2 ||
+    (evidence.antiSubmarine?.targetCount ?? 0) >= 2
+  ) {
+    return 'anti_submarine'
   }
 
   if (context.enemyCategory === 'transport_group') {
@@ -549,6 +683,34 @@ const buildFormalAntiAirSentence = (
   }
 
   return '　防空戦果　防空戦闘ニ依リ敵航空兵力ニ損耗ヲ生ゼシム。'
+}
+
+const buildFormalAntiSubmarineSentences = (
+  battle: BattleNodeCapture,
+  profile: FormalObservationProfile,
+) => {
+  const contributions = battle.antiSubmarineSummary?.contributions ?? []
+  if (contributions.length === 0) {
+    return []
+  }
+
+  if (profile.id === 'fragmentary') {
+    return ['　対潜戦果　対潜攻撃実施、戦果細目後報。']
+  }
+
+  const visible = contributions.slice(0, profile.id === 'surveyed' ? 2 : 1)
+  return visible.map((contribution) => {
+    const actor = contribution.shipNameRaw
+      ? `「${normalizeFriendlyReportName(contribution.shipNameRaw)}」`
+      : '我部隊ノ'
+    if (profile.id === 'field_summary') {
+      return `　対潜戦果　${actor}対潜攻撃数回、敵潜水艦ニ有効打撃。`
+    }
+
+    const hitCount = toFormalKansuji(contribution.damagingHitCount)
+    const targetCount = toFormalKansuji(Math.max(1, contribution.targetCount))
+    return `　対潜戦果　${actor}対潜攻撃${hitCount}回、敵潜水艦${targetCount}隻ニ有効打撃。`
+  })
 }
 
 const buildFormalCarrierAirLossSentence = (
@@ -653,6 +815,17 @@ const buildStandardClaimBoard = (
     })
   }
 
+  if (evidence.antiSubmarine?.triggered) {
+    const target = evidence.antiSubmarine.targetCount >= 2 ? '敵潜水艦数隻' : '敵潜水艦'
+    const sentence = evidence.antiSubmarine.shipName
+      ? `殊ニ「${evidence.antiSubmarine.shipName}」ノ対潜戦闘鋭甚ニシテ、${target}ヲ撃沈破セリ。`
+      : `対潜攻撃ニ依リ、${target}ヲ撃沈破セリ。`
+    items.push({
+      kind: 'anti_submarine',
+      sentence,
+    })
+  }
+
   return {
     focus,
     evidence,
@@ -720,6 +893,24 @@ const buildShortAntiAirSupportBullet = (
   return context.enemyCategory === 'submarine_force'
     ? '防空戦闘鋭甚、我作戦支障ナシ。'
     : '防空成功、敵航空企図亦挫折セリ。'
+}
+
+const buildShortAntiSubmarineBullet = (truthSource: WarReportTruthSource | null) => {
+  const aggregate = buildSortieAntiSubmarineAggregate(truthSource)
+  if (!aggregate?.triggered) {
+    return ''
+  }
+
+  const target = aggregate.targetCount >= 2 ? '敵潜水艦数隻' : '敵潜水艦'
+  if (aggregate.shipName) {
+    return aggregate.damagingHitCount >= 2 || aggregate.targetCount >= 2
+      ? `「${aggregate.shipName}」対潜奮戦、${target}ヲ掃蕩。`
+      : `「${aggregate.shipName}」対潜攻撃、敵潜航兵力ニ打撃。`
+  }
+
+  return aggregate.damagingHitCount >= 2 || aggregate.targetCount >= 2
+    ? `${target}ヲ掃蕩、対潜戦果顕著。`
+    : '対潜攻撃、敵潜航兵力ニ打撃。'
 }
 
 const buildShortCarrierAirLossBullet = (
@@ -1085,16 +1276,118 @@ const buildFormalFlagshipListing = (context: ReportRenderContext) => {
     : `旗艦「${flagshipDisplay}」`
 }
 
+type MeritCandidate = {
+  shipName: string
+  antiAirStrength: number
+  antiSubmarineStrength: number
+  isMvp: boolean
+  fleetOrder: number
+}
+
+const getAntiAirMeritStrength = (truthLoss: number | null) =>
+  truthLoss != null && truthLoss >= 60 ? 3 : truthLoss != null && truthLoss >= 20 ? 2 : 1
+
+const getAntiSubmarineMeritStrength = (
+  damagingHitCount: number,
+  targetCount: number,
+  assessedDamage: number,
+) =>
+  (damagingHitCount >= 3 && targetCount >= 2) || assessedDamage >= 100
+    ? 3
+    : damagingHitCount >= 2 || targetCount >= 2 || assessedDamage >= 50
+      ? 2
+      : 1
+
+const getDistinguishedBasis = (candidate: MeritCandidate): DistinguishedCredit['basis'] => {
+  if (candidate.antiAirStrength > 0 && candidate.antiSubmarineStrength > 0) {
+    return 'combined_specialist'
+  }
+  if (candidate.antiAirStrength >= 2) {
+    return 'anti_air_high'
+  }
+  if (candidate.antiSubmarineStrength >= 2) {
+    return 'anti_submarine_high'
+  }
+  if (candidate.antiAirStrength > 0) {
+    return 'anti_air'
+  }
+  if (candidate.antiSubmarineStrength > 0) {
+    return 'anti_submarine'
+  }
+  return 'mvp'
+}
+
 const selectDistinguishedCredit = (
   context: ReportRenderContext,
   truthSource: WarReportTruthSource | null,
 ): DistinguishedCredit | null => {
-  const antiAir = buildSortieAntiAirAggregate(truthSource)
+  const candidates = new Map<string, MeritCandidate>()
+  const fleetOrder = new Map(
+    context.friendlyFleet.map((ship, index) => [normalizeFriendlyReportName(ship.nameJa), index]),
+  )
+  const getCandidate = (shipName: string) => {
+    const existing = candidates.get(shipName)
+    if (existing) {
+      return existing
+    }
+    const created: MeritCandidate = {
+      shipName,
+      antiAirStrength: 0,
+      antiSubmarineStrength: 0,
+      isMvp: shipName === context.mvpDisplay,
+      fleetOrder: fleetOrder.get(shipName) ?? Number.MAX_SAFE_INTEGER,
+    }
+    candidates.set(shipName, created)
+    return created
+  }
 
-  if (antiAir?.shipName && (antiAir.truthLoss ?? 0) >= 20) {
+  for (const contribution of buildSortieAntiAirContributions(truthSource)) {
+    const candidate = getCandidate(contribution.shipName)
+    candidate.antiAirStrength = getAntiAirMeritStrength(contribution.truthLoss)
+  }
+
+  for (const contribution of buildSortieAntiSubmarineContributions(truthSource)) {
+    if (!contribution.shipName) {
+      continue
+    }
+    const candidate = getCandidate(contribution.shipName)
+    candidate.antiSubmarineStrength = getAntiSubmarineMeritStrength(
+      contribution.damagingHitCount,
+      contribution.targetCount,
+      contribution.assessedDamage,
+    )
+  }
+
+  if (context.mvpDisplay) {
+    getCandidate(context.mvpDisplay).isMvp = true
+  }
+
+  const ranked = Array.from(candidates.values()).sort((left, right) => {
+    const leftDomains =
+      Number(left.antiAirStrength >= 2) + Number(left.antiSubmarineStrength >= 2)
+    const rightDomains =
+      Number(right.antiAirStrength >= 2) + Number(right.antiSubmarineStrength >= 2)
+    const leftPeak = Math.max(left.antiAirStrength, left.antiSubmarineStrength)
+    const rightPeak = Math.max(right.antiAirStrength, right.antiSubmarineStrength)
+    const leftTotal = left.antiAirStrength + left.antiSubmarineStrength
+    const rightTotal = right.antiAirStrength + right.antiSubmarineStrength
+    return (
+      rightDomains - leftDomains ||
+      rightPeak - leftPeak ||
+      rightTotal - leftTotal ||
+      Number(right.isMvp) - Number(left.isMvp) ||
+      left.fleetOrder - right.fleetOrder ||
+      left.shipName.localeCompare(right.shipName, 'ja')
+    )
+  })
+
+  const highSpecialist = ranked.find(
+    (candidate) => Math.max(candidate.antiAirStrength, candidate.antiSubmarineStrength) >= 2,
+  )
+  if (highSpecialist) {
     return {
-      shipName: antiAir.shipName,
-      basis: 'anti_air_high',
+      shipName: highSpecialist.shipName,
+      basis: getDistinguishedBasis(highSpecialist),
     }
   }
 
@@ -1105,14 +1398,15 @@ const selectDistinguishedCredit = (
     }
   }
 
-  if (antiAir?.shipName) {
-    return {
-      shipName: antiAir.shipName,
-      basis: 'anti_air',
-    }
-  }
-
-  return null
+  const lowSpecialist = ranked.find(
+    (candidate) => candidate.antiAirStrength > 0 || candidate.antiSubmarineStrength > 0,
+  )
+  return lowSpecialist
+    ? {
+        shipName: lowSpecialist.shipName,
+        basis: getDistinguishedBasis(lowSpecialist),
+      }
+    : null
 }
 
 const buildMvpClause = (
@@ -1147,17 +1441,35 @@ const buildStandardDistinguishedClause = (
   }
 
   const variants =
-    credit.basis === 'anti_air_high'
+    credit.basis === 'combined_specialist'
       ? [
+          `殊ニ「${credit.shipName}」ノ防空並対潜戦闘、武功顕著ナリ。`,
+          `「${credit.shipName}」ノ防空対潜両面ニ於ケル奮戦、殊勲ト認ム。`,
+          `本行動ニ於ケル「${credit.shipName}」ノ防空並対潜戦果、特筆ニ値ス。`,
+        ]
+      : credit.basis === 'anti_air_high'
+        ? [
           `殊ニ「${credit.shipName}」ノ防空戦闘、武功顕著ナリ。`,
           `「${credit.shipName}」ノ防空奮戦、殊勲ト認ム。`,
           `本行動ニ於ケル「${credit.shipName}」ノ対空戦闘、特筆ニ値ス。`,
         ]
-      : [
-          `「${credit.shipName}」ノ防空戦闘、功アリ。`,
-          `本行動ニ於ケル「${credit.shipName}」ノ防空奮戦ヲ録ス。`,
-          `「${credit.shipName}」ノ対空戦闘、特筆ニ値ス。`,
-        ]
+        : credit.basis === 'anti_submarine_high'
+          ? [
+              `殊ニ「${credit.shipName}」ノ対潜戦闘、武功顕著ナリ。`,
+              `「${credit.shipName}」ノ対潜奮戦、殊勲ト認ム。`,
+              `本行動ニ於ケル「${credit.shipName}」ノ対潜戦果、特筆ニ値ス。`,
+            ]
+          : credit.basis === 'anti_submarine'
+            ? [
+                `「${credit.shipName}」ノ対潜戦闘、功アリ。`,
+                `本行動ニ於ケル「${credit.shipName}」ノ対潜奮戦ヲ録ス。`,
+                `「${credit.shipName}」ノ対潜戦闘、特筆ニ値ス。`,
+              ]
+            : [
+                `「${credit.shipName}」ノ防空戦闘、功アリ。`,
+                `本行動ニ於ケル「${credit.shipName}」ノ防空奮戦ヲ録ス。`,
+                `「${credit.shipName}」ノ対空戦闘、特筆ニ値ス。`,
+              ]
 
   return `${pickVariant(seed, slot, variants)} `
 }
@@ -1219,6 +1531,19 @@ const buildHistoricalStandardHeadlineFamilies = (
           `${context.operationPhrase}方面作戦、敵輸送企図ヲ挫折`,
           `${context.operationPhrase}方面交戦、敵上陸企図ヲ阻止`,
           `${context.operationPhrase}方面作戦、敵輸送作戦ヲ阻碍`,
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'anti_submarine') {
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-headline-anti-submarine-focus',
+        variants: [
+          `${context.operationPhrase}方面対潜戦、敵潜水兵力ヲ撃摧`,
+          `${context.operationPhrase}方面作戦、敵潜航企図ヲ粉砕`,
+          `${context.operationPhrase}方面交戦、対潜戦果顕著`,
         ],
       },
     ])
@@ -1374,6 +1699,22 @@ const buildHistoricalStandardSubheadlineFamilies = (
           '敵輸送企図ヲ挫折セシメタリ',
           '敵上陸企図ヲ阻止セリ',
           '敵輸送作戦ヲ妨止シ所定成果ヲ収メタリ',
+        ],
+      },
+    ])
+  }
+
+  if (focus === 'anti_submarine') {
+    const actor = board.evidence.antiSubmarine?.shipName
+    return uniqueFamilies<TextFamily>([
+      {
+        id: 'historical-standard-subheadline-anti-submarine-focus',
+        variants: [
+          actor
+            ? `殊ニ「${actor}」ノ対潜戦闘鋭甚、敵潜航企図ヲ粉砕セリ`
+            : '対潜攻撃鋭甚ニシテ敵潜航企図ヲ粉砕セリ',
+          '敵潜水兵力ニ有効打撃ヲ與ヘタリ',
+          '敵潜水兵力ヲ制シ所定成果ヲ収メタリ',
         ],
       },
     ])
@@ -2275,6 +2616,19 @@ const buildShortHeadlineFamilies = (
       ])
     }
 
+    if (focus === 'anti_submarine') {
+      return uniqueFamilies<TextFamily>([
+        {
+          id: 'short-headline-anti-submarine-high-glory-focused',
+          variants: [
+            `${context.operationPhrase}方面対潜戦、敵潜水兵力ヲ撃摧`,
+            `${context.operationPhrase}方面交戦、敵潜航企図ヲ粉砕`,
+            `${context.operationPhrase}方面戦況、対潜戦果顕著`,
+          ],
+        },
+      ])
+    }
+
     if (focus === 'submarine_force') {
       return uniqueFamilies<TextFamily>([
         {
@@ -2445,6 +2799,7 @@ const buildHighGloryShortPrimaryFamilies = (
           ],
         },
       ])
+    case 'anti_submarine':
     case 'submarine_force':
       return uniqueFamilies<TextFamily>([
         {
@@ -2532,6 +2887,7 @@ const buildHighGloryShortSecondaryFamilies = (
           ],
         },
       ])
+    case 'anti_submarine':
     case 'submarine_force':
       return uniqueFamilies<TextFamily>([
         {
@@ -2586,10 +2942,15 @@ const selectHighGloryShortThirdBullet = (
   carrierAirLossBullet: string,
   antiAirBullet: string,
   antiAirSupportBullet: string,
+  antiSubmarineBullet: string,
   closingBullet: string,
 ) => {
   if (focus !== 'carrier_air_loss' && carrierAirLossBullet) {
     return carrierAirLossBullet
+  }
+
+  if (focus === 'anti_submarine' && antiSubmarineBullet) {
+    return antiSubmarineBullet
   }
 
   if (focus === 'anti_air_numeric' || focus === 'air_power') {
@@ -2600,6 +2961,10 @@ const selectHighGloryShortThirdBullet = (
     return antiAirSupportBullet
   } else if (antiAirBullet) {
     return antiAirBullet
+  }
+
+  if (antiSubmarineBullet) {
+    return antiSubmarineBullet
   }
 
   return closingBullet
@@ -3003,11 +3368,17 @@ const buildFormalFindings = (
   const lines = [`　${familyText}`]
   const credit = selectDistinguishedCredit(context, truthSource)
   const distinguishedLine = credit
-    ? credit.basis === 'anti_air_high'
-      ? `　戦闘後判定ニ於テ「${credit.shipName}」防空戦果顕著、殊勲艦ト認定。`
-      : credit.basis === 'anti_air'
-        ? `　戦闘後判定ニ於テ「${credit.shipName}」防空戦闘功アリ、殊勲艦ト認定。`
-        : `　戦闘後判定ニ於テ「${credit.shipName}」殊勲艦ト認定。`
+    ? credit.basis === 'combined_specialist'
+      ? `　戦闘後判定ニ於テ「${credit.shipName}」防空並対潜戦果顕著、殊勲艦ト認定。`
+      : credit.basis === 'anti_air_high'
+        ? `　戦闘後判定ニ於テ「${credit.shipName}」防空戦果顕著、殊勲艦ト認定。`
+        : credit.basis === 'anti_submarine_high'
+          ? `　戦闘後判定ニ於テ「${credit.shipName}」対潜戦果顕著、殊勲艦ト認定。`
+          : credit.basis === 'anti_air'
+            ? `　戦闘後判定ニ於テ「${credit.shipName}」防空戦闘功アリ、殊勲艦ト認定。`
+            : credit.basis === 'anti_submarine'
+              ? `　戦闘後判定ニ於テ「${credit.shipName}」対潜戦闘功アリ、殊勲艦ト認定。`
+              : `　戦闘後判定ニ於テ「${credit.shipName}」殊勲艦ト認定。`
     : ''
 
   if (distinguishedLine) {
@@ -3206,6 +3577,7 @@ const buildFormalNodeLines = (
   if (antiAirSentence) {
     lines.push(antiAirSentence)
   }
+  lines.push(...buildFormalAntiSubmarineSentences(battle, profile))
   const enemyFlagshipSunkSentence = buildFormalEnemyFlagshipSunkSentence(battle, profile)
   if (enemyFlagshipSunkSentence) {
     lines.push(enemyFlagshipSunkSentence)
@@ -3523,6 +3895,8 @@ const buildShortBulletin = (
     context.kind === 'sortie'
       ? buildShortAntiAirSupportBullet(options.truthSource ?? null, context)
       : ''
+  const antiSubmarineBullet =
+    context.kind === 'sortie' ? buildShortAntiSubmarineBullet(options.truthSource ?? null) : ''
   const carrierAirLossBullet =
     context.kind === 'sortie'
       ? buildShortCarrierAirLossBullet(options.truthSource ?? null, fingerprint)
@@ -3532,7 +3906,8 @@ const buildShortBulletin = (
       ? buildShortEnemyFlagshipSunkBullet(options.truthSource ?? null)
       : ''
 
-  const priorityThirdBullet = enemyFlagshipSunkBullet || carrierAirLossBullet || antiAirBullet
+  const priorityThirdBullet =
+    enemyFlagshipSunkBullet || carrierAirLossBullet || antiAirBullet || antiSubmarineBullet
 
   let bulletinLines: string[]
 
@@ -3575,6 +3950,7 @@ const buildShortBulletin = (
             carrierAirLossBullet,
             antiAirBullet,
             antiAirSupportBullet,
+            antiSubmarineBullet,
             closingBullet,
           ))
 

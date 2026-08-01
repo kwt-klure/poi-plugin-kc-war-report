@@ -138,6 +138,19 @@ export type AntiAirSummary = {
   enemyPlaneLoss: number | null
 }
 
+export type AntiSubmarineContribution = {
+  shipNameRaw: string | null
+  damagingHitCount: number
+  targetCount: number
+  // Internal merit signal only; public and formal prose must not present this as exact HP loss.
+  assessedDamage: number
+}
+
+export type AntiSubmarineSummary = {
+  triggered: boolean
+  contributions: AntiSubmarineContribution[]
+}
+
 export type CarrierAirLossSummary = {
   triggered: boolean
   carrierLossCount: number
@@ -165,6 +178,7 @@ export type BattleNodeCapture = {
   sawAirAttack: boolean
   antiAirScreen: boolean
   antiAirSummary?: AntiAirSummary | null
+  antiSubmarineSummary?: AntiSubmarineSummary | null
   carrierAirLossSummary?: CarrierAirLossSummary | null
   enemyFlagshipSunkSummary?: EnemyFlagshipSunkSummary | null
   flagshipNameRaw: string | null

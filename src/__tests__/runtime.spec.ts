@@ -2,6 +2,7 @@ import { normalizeSortieSession } from '../battle/model'
 import {
   __detectAirAttackFromPacketForTests,
   __extractAntiAirSummaryFromPacketForTests,
+  __extractAntiSubmarineSummaryFromPacketForTests,
   __extractCarrierAirLossSummaryFromPacketForTests,
   __extractEnemyFlagshipSunkSummaryFromPacketForTests,
   __resolveDeckIdForTests,
@@ -246,6 +247,138 @@ describe('battle runtime fleet refresh', () => {
     )
 
     expect(summary).toBeNull()
+  })
+
+  it('keeps combined-fleet anti-air credit anonymous when fleet ownership is ambiguous', () => {
+    const summary = __extractAntiAirSummaryFromPacketForTests(
+      {
+        api_f_nowhps_combined: [30, 30, 30, 30, 30, 30],
+        api_kouku: {
+          api_stage2: {
+            api_e_lostcount: [20, 14],
+            api_air_fire: {
+              api_idx: 0,
+              api_kind: 1,
+            },
+          },
+        },
+      },
+      sortieShips,
+    )
+
+    expect(summary).toEqual({
+      triggered: true,
+      shipNameRaw: null,
+      ciKind: 1,
+      enemyPlaneLoss: 34,
+    })
+  })
+
+  it('extracts named anti-submarine contribution from aligned shelling arrays', () => {
+    importPoiState({
+      ui: { activeMainTab: '' },
+      plugins: [],
+      const: {
+        $ships: {
+          '3001': { api_name: '潜水カ級', api_stype: 13 },
+          '3002': { api_name: '潜水ヨ級', api_stype: 13 },
+          '3003': { api_name: '駆逐イ級', api_stype: 2 },
+        },
+      },
+    })
+
+    const summary = __extractAntiSubmarineSummaryFromPacketForTests(
+      {
+        api_ship_ke: [3001, 3002, 3003],
+        api_e_maxhps: [30, 40, 20],
+        api_opening_taisen: {
+          api_at_eflag: [0, 0, 1],
+          api_at_list: [0, 1, 0],
+          api_df_list: [[0, 1], [2], [0]],
+          api_damage: [[18, 52], [99], [30]],
+        },
+      },
+      sortieShips,
+    )
+
+    expect(summary).toEqual({
+      triggered: true,
+      contributions: [
+        {
+          shipNameRaw: '神風改',
+          damagingHitCount: 2,
+          targetCount: 2,
+          assessedDamage: 58,
+        },
+      ],
+    })
+  })
+
+  it('keeps an unmapped combined-fleet anti-submarine attacker anonymous', () => {
+    importPoiState({
+      ui: { activeMainTab: '' },
+      plugins: [],
+      const: {
+        $ships: {
+          '3011': { api_name: '潜水ソ級', api_stype: 13 },
+        },
+      },
+    })
+
+    const summary = __extractAntiSubmarineSummaryFromPacketForTests(
+      {
+        api_ship_ke: [3011],
+        api_e_maxhps: [48],
+        api_f_nowhps_combined: [30, 30, 30, 30, 30, 30],
+        api_hougeki1: {
+          api_at_eflag: [0],
+          api_at_list: [0],
+          api_df_list: [[0]],
+          api_damage: [[63]],
+        },
+      },
+      sortieShips,
+    )
+
+    expect(summary).toEqual({
+      triggered: true,
+      contributions: [
+        {
+          shipNameRaw: null,
+          damagingHitCount: 1,
+          targetCount: 1,
+          assessedDamage: 48,
+        },
+      ],
+    })
+  })
+
+  it('fails closed on malformed anti-submarine phase arrays', () => {
+    importPoiState({
+      ui: { activeMainTab: '' },
+      plugins: [],
+      const: {
+        $ships: {
+          '3021': { api_name: '潜水カ級', api_stype: 13 },
+        },
+      },
+    })
+
+    expect(
+      __extractAntiSubmarineSummaryFromPacketForTests(
+        {
+          api_ship_ke: [3021],
+          api_e_maxhps: [20],
+          api_hougeki1: {
+            api_at_eflag: [0],
+            api_at_list: [0],
+            api_df_list: [[0, 0]],
+            api_damage: [[12]],
+          },
+        },
+        sortieShips,
+      ),
+    ).toBeNull()
   })
 
   it('extracts carrier-air-loss summary when enemy carriers end the battle at heavy damage or worse', () => {

@@ -19,6 +19,8 @@ import type { PoiFleet, PoiShip, PoiShipMaster, PoiShipTypeMaster } from '../poi
 import type {
   AdmiralIdentity,
   AntiAirSummary,
+  AntiSubmarineContribution,
+  AntiSubmarineSummary,
   BattleCapture,
   BattleMode,
   BattleNodeCapture,
@@ -49,12 +51,23 @@ type ResultBody = {
 
 type BattlePacket = {
   api_ship_ke?: number[]
+  api_ship_ke_combined?: number[]
   api_e_nowhps?: number[]
   api_e_maxhps?: number[]
+  api_e_maxhps_combined?: number[]
+  api_f_nowhps_combined?: number[]
+  api_f_maxhps_combined?: number[]
   api_kouku?: unknown
   api_injection_kouku?: unknown
   api_air_base_attack?: unknown[]
   api_friendly_kouku?: unknown
+  api_opening_taisen?: unknown
+  api_hougeki1?: unknown
+  api_hougeki2?: unknown
+  api_hougeki3?: unknown
+  api_hougeki?: unknown
+  api_n_hougeki1?: unknown
+  api_n_hougeki2?: unknown
 }
 
 type CurrentBattleContext = {
@@ -69,6 +82,7 @@ type CurrentBattleContext = {
   enemyShipIds: number[]
   sawAirAttack: boolean
   antiAirSummary: AntiAirSummary | null
+  antiSubmarineSummary: AntiSubmarineSummary | null
   carrierAirLossSummary: CarrierAirLossSummary | null
   enemyFlagshipSunkSummary: EnemyFlagshipSunkSummary | null
 }
@@ -378,6 +392,11 @@ const getShipMasterById = (shipId: number) =>
 const isCarrierShipMaster = (master: PoiShipMaster | null) =>
   master?.api_stype != null && carrierShipTypeIds.has(master.api_stype)
 
+const submarineShipTypeIds = new Set([13, 14])
+
+const isSubmarineShipMaster = (master: PoiShipMaster | null) =>
+  master?.api_stype != null && submarineShipTypeIds.has(master.api_stype)
+
 const sumPositiveNumbers = (values: number[]) =>
   values.reduce((sum, value) => sum + (Number.isFinite(value) && value > 0 ? value : 0), 0)
 
@@ -407,8 +426,9 @@ const extractAntiAirSummaryFromPacket = (
     return null
   }
 
+  const hasFriendlyCombinedFleet = Array.isArray(packet.api_f_nowhps_combined)
   const triggeringShip =
-    airFireEvent.idx != null && airFireEvent.idx < fleetShips.length
+    !hasFriendlyCombinedFleet && airFireEvent.idx != null && airFireEvent.idx < fleetShips.length
       ? fleetShips[airFireEvent.idx] ?? null
       : null
 
@@ -418,6 +438,175 @@ const extractAntiAirSummaryFromPacket = (
     ciKind: airFireEvent.kind,
     enemyPlaneLoss: enemyPlaneLoss > 0 ? enemyPlaneLoss : null,
   }
+}
+
+const getBattleShellingPhases = (packet: BattlePacket) =>
+  [
+    packet.api_opening_taisen,
+    packet.api_hougeki1,
+    packet.api_hougeki2,
+    packet.api_hougeki3,
+    packet.api_hougeki,
+    packet.api_n_hougeki1,
+    packet.api_n_hougeki2,
+  ].filter((phase) => phase != null)
+
+const toNumberList = (value: unknown): number[] => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return [value]
+  }
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter(
+    (entry): entry is number => typeof entry === 'number' && Number.isFinite(entry),
+  )
+}
+
+type AntiSubmarineAccumulator = {
+  shipNameRaw: string | null
+  damagingHitCount: number
+  targetDamage: Map<number, number>
+}
+
+const extractAntiSubmarineSummaryFromPacket = (
+  packet: BattlePacket,
+  fleetShips: FleetShipSnapshot[],
+  enemyShipIdsFallback: number[] = [],
+): AntiSubmarineSummary | null => {
+  const packetEnemyShipIds = [
+    ...(packet.api_ship_ke ?? []),
+    ...(packet.api_ship_ke_combined ?? []),
+  ]
+  const enemyShipIds = packetEnemyShipIds.length > 0 ? packetEnemyShipIds : enemyShipIdsFallback
+  const enemyMaxHps = [
+    ...(packet.api_e_maxhps ?? []),
+    ...(packet.api_e_maxhps_combined ?? []),
+  ]
+  if (enemyShipIds.length === 0) {
+    return null
+  }
+
+  const contributions = new Map<string, AntiSubmarineAccumulator>()
+  const hasFriendlyCombinedFleet = Array.isArray(packet.api_f_nowhps_combined)
+
+  for (const phase of getBattleShellingPhases(packet)) {
+    if (!phase || typeof phase !== 'object') {
+      continue
+    }
+
+    const phaseObject = phase as Record<string, unknown>
+    const attackerFlags = phaseObject.api_at_eflag
+    const attackerIndices = phaseObject.api_at_list
+    const defenderLists = phaseObject.api_df_list
+    const damageLists = phaseObject.api_damage
+    if (
+      !Array.isArray(attackerFlags) ||
+      !Array.isArray(attackerIndices) ||
+      !Array.isArray(defenderLists) ||
+      !Array.isArray(damageLists)
+    ) {
+      continue
+    }
+
+    const attackCount = Math.min(
+      attackerFlags.length,
+      attackerIndices.length,
+      defenderLists.length,
+      damageLists.length,
+    )
+    for (let attackIndex = 0; attackIndex < attackCount; attackIndex += 1) {
+      if (attackerFlags[attackIndex] !== 0) {
+        continue
+      }
+
+      const attackerIndex = attackerIndices[attackIndex]
+      if (
+        typeof attackerIndex !== 'number' ||
+        !Number.isInteger(attackerIndex) ||
+        attackerIndex < 0
+      ) {
+        continue
+      }
+
+      const defenderIndices = toNumberList(defenderLists[attackIndex])
+      const damages = toNumberList(damageLists[attackIndex])
+      if (defenderIndices.length === 0 || defenderIndices.length !== damages.length) {
+        continue
+      }
+
+      const attacker =
+        !hasFriendlyCombinedFleet && attackerIndex < fleetShips.length
+          ? fleetShips[attackerIndex] ?? null
+          : null
+      const shipNameRaw = attacker?.nameJa ?? null
+      const key = shipNameRaw ?? '__unattributed__'
+      let accumulator = contributions.get(key)
+      if (!accumulator) {
+        accumulator = {
+          shipNameRaw,
+          damagingHitCount: 0,
+          targetDamage: new Map<number, number>(),
+        }
+        contributions.set(key, accumulator)
+      }
+
+      for (let hitIndex = 0; hitIndex < defenderIndices.length; hitIndex += 1) {
+        const defenderIndex = defenderIndices[hitIndex]
+        const damage = damages[hitIndex]
+        if (
+          !Number.isInteger(defenderIndex) ||
+          defenderIndex < 0 ||
+          damage == null ||
+          damage <= 0
+        ) {
+          continue
+        }
+
+        const enemyShipId = enemyShipIds[defenderIndex]
+        if (
+          typeof enemyShipId !== 'number' ||
+          !isSubmarineShipMaster(getShipMasterById(enemyShipId))
+        ) {
+          continue
+        }
+
+        accumulator.damagingHitCount += 1
+        accumulator.targetDamage.set(
+          defenderIndex,
+          (accumulator.targetDamage.get(defenderIndex) ?? 0) + damage,
+        )
+      }
+    }
+  }
+
+  const resolved: AntiSubmarineContribution[] = Array.from(contributions.values())
+    .filter((contribution) => contribution.damagingHitCount > 0)
+    .map((contribution) => ({
+      shipNameRaw: contribution.shipNameRaw,
+      damagingHitCount: contribution.damagingHitCount,
+      targetCount: contribution.targetDamage.size,
+      assessedDamage: Array.from(contribution.targetDamage.entries()).reduce(
+        (sum, [targetIndex, damage]) => {
+          const maxHp = enemyMaxHps[targetIndex]
+          return sum + Math.min(damage, typeof maxHp === 'number' && maxHp > 0 ? maxHp : damage)
+        },
+        0,
+      ),
+    }))
+    .sort(
+      (left, right) =>
+        right.damagingHitCount - left.damagingHitCount ||
+        right.targetCount - left.targetCount ||
+        right.assessedDamage - left.assessedDamage,
+    )
+
+  return resolved.length > 0
+    ? {
+        triggered: true,
+        contributions: resolved,
+      }
+    : null
 }
 
 const extractCarrierAirLossSummaryFromPacket = (
@@ -549,6 +738,46 @@ const mergeAntiAirSummary = (
   }
 }
 
+const mergeAntiSubmarineSummary = (
+  current: AntiSubmarineSummary | null,
+  next: AntiSubmarineSummary | null,
+): AntiSubmarineSummary | null => {
+  if (!current) {
+    return next
+  }
+  if (!next) {
+    return current
+  }
+
+  const merged = new Map<string, AntiSubmarineContribution>()
+  for (const contribution of [...current.contributions, ...next.contributions]) {
+    const key = contribution.shipNameRaw ?? '__unattributed__'
+    const existing = merged.get(key)
+    merged.set(
+      key,
+      existing
+        ? {
+            shipNameRaw: existing.shipNameRaw ?? contribution.shipNameRaw,
+            damagingHitCount: existing.damagingHitCount + contribution.damagingHitCount,
+            // Separate packets may describe the same target; retain the safer observed maximum.
+            targetCount: Math.max(existing.targetCount, contribution.targetCount),
+            assessedDamage: existing.assessedDamage + contribution.assessedDamage,
+          }
+        : { ...contribution },
+    )
+  }
+
+  return {
+    triggered: true,
+    contributions: Array.from(merged.values()).sort(
+      (left, right) =>
+        right.damagingHitCount - left.damagingHitCount ||
+        right.targetCount - left.targetCount ||
+        right.assessedDamage - left.assessedDamage,
+    ),
+  }
+}
+
 const mergeCarrierAirLossSummary = (
   current: CarrierAirLossSummary | null,
   next: CarrierAirLossSummary | null,
@@ -661,6 +890,12 @@ const buildBattleNodeCapture = (
     sawAirAttack: context.sawAirAttack,
     antiAirScreen,
     antiAirSummary: context.antiAirSummary ? { ...context.antiAirSummary } : null,
+    antiSubmarineSummary: context.antiSubmarineSummary
+      ? {
+          ...context.antiSubmarineSummary,
+          contributions: context.antiSubmarineSummary.contributions.map((entry) => ({ ...entry })),
+        }
+      : null,
     carrierAirLossSummary: context.carrierAirLossSummary
       ? { ...context.carrierAirLossSummary }
       : null,
@@ -899,6 +1134,7 @@ const beginSortieBattleContext = (detail: GameResponseDetail) => {
     enemyShipIds: [],
     sawAirAttack: false,
     antiAirSummary: null,
+    antiSubmarineSummary: null,
     carrierAirLossSummary: null,
     enemyFlagshipSunkSummary: null,
   }
@@ -921,6 +1157,7 @@ const beginPracticeBattleContext = (detail: GameResponseDetail) => {
     enemyShipIds: [],
     sawAirAttack: false,
     antiAirSummary: null,
+    antiSubmarineSummary: null,
     carrierAirLossSummary: null,
     enemyFlagshipSunkSummary: null,
   }
@@ -942,6 +1179,14 @@ const updateCurrentBattleFromPacket = (packet: BattlePacket) => {
   currentBattle.antiAirSummary = mergeAntiAirSummary(
     currentBattle.antiAirSummary,
     extractAntiAirSummaryFromPacket(packet, currentBattle.fleetShips),
+  )
+  currentBattle.antiSubmarineSummary = mergeAntiSubmarineSummary(
+    currentBattle.antiSubmarineSummary,
+    extractAntiSubmarineSummaryFromPacket(
+      packet,
+      currentBattle.fleetShips,
+      currentBattle.enemyShipIds,
+    ),
   )
   currentBattle.carrierAirLossSummary = mergeCarrierAirLossSummary(
     currentBattle.carrierAirLossSummary,
@@ -1044,6 +1289,11 @@ export const __extractAntiAirSummaryFromPacketForTests = (
   packet: BattlePacket,
   fleetShips: FleetShipSnapshot[],
 ) => extractAntiAirSummaryFromPacket(packet, fleetShips)
+
+export const __extractAntiSubmarineSummaryFromPacketForTests = (
+  packet: BattlePacket,
+  fleetShips: FleetShipSnapshot[],
+) => extractAntiSubmarineSummaryFromPacket(packet, fleetShips)
 
 export const __extractCarrierAirLossSummaryFromPacketForTests = (
   packet: BattlePacket,

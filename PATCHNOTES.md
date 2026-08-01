@@ -1,5 +1,46 @@
 # Patch Notes
 
+## 0.4.17
+
+This patch adds a bounded anti-submarine contribution signal and lets the report
+judge AA, ASW, and the visible game MVP together. It remains deterministic and
+without an LLM; it does not reconstruct a full battle or assign submarine sinks.
+
+この patch は bounded な対潜戦果 signal を追加し、防空、対潜、game MVP を一つの
+deterministic な殊勲評議に掛けます。LLM は使わず、full battle reconstruction や
+特定艦への潜水艦撃沈帰属は行いません。
+
+### Changed
+
+- `truth capture`
+  - reads positive friendly ASW hits from aligned opening-ASW and shelling arrays
+  - accepts only targets identified as submarines by ship master data
+  - keeps unmapped combined-fleet attackers anonymous instead of guessing a ship
+- `殊勲評議`
+  - groups AA loss by named actor before assigning credit
+  - lets strong ASW outrank an ordinary MVP
+  - rewards one ship contributing across both AA and ASW before a comparable single-domain candidate
+  - keeps the game MVP as fallback and deterministic tie-break
+- `硬派詳報`
+  - renders exact, summarized, or fragmentary ASW observation according to the report-wide profile
+  - records effective attacks but never claims a named submarine sink
+- `標準公報 / 短報`
+  - may inflate positive ASW evidence into `撃沈破` or `掃蕩` rhetoric
+  - mentions the best named ASW contribution even when another claim owns the headline
+- `runtime boundary`
+  - installation remains separate from Poi process control; no UI takeover, reload, or restart is required
+
+### Validation
+
+Checked with direct Node entrypoints because this desktop runtime did not expose
+an `npm` executable in `PATH`:
+
+```bash
+node node_modules/jest/bin/jest.js --runInBand src/__tests__/runtime.spec.ts
+node node_modules/jest/bin/jest.js --runInBand src/__tests__/report.spec.ts
+node node_modules/typescript/bin/tsc --noEmit
+```
+
 ## 0.4.16
 
 This release gives `硬派詳報` a deterministic field-observation layer. The report

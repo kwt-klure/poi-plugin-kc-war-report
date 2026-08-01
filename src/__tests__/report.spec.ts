@@ -227,6 +227,30 @@ const antiAirSortieSession: SortieSessionCapture = {
   battles: [antiAirBattle],
 }
 
+const antiSubmarineBattle: BattleNodeCapture = {
+  ...nodeBattle,
+  sawAirAttack: false,
+  antiAirScreen: false,
+  antiSubmarineSummary: {
+    triggered: true,
+    contributions: [
+      {
+        shipNameRaw: 'Johnston改',
+        damagingHitCount: 2,
+        targetCount: 2,
+        assessedDamage: 58,
+      },
+    ],
+  },
+  mvpNameRaw: 'Atlanta',
+}
+
+const antiSubmarineSortieSession: SortieSessionCapture = {
+  ...sortieSession,
+  id: 'sortie-asw-1',
+  battles: [antiSubmarineBattle],
+}
+
 type FormalObservationProfileIdForTest = 'surveyed' | 'field_summary' | 'fragmentary'
 
 const renderFormalSortie = (session: SortieSessionCapture, variantSeed: number) =>
@@ -657,6 +681,103 @@ describe('war report sortie architecture', () => {
       /「初月」ノ防空戦闘、武功顕著ナリ。|「初月」ノ防空奮戦、殊勲ト認ム。|「初月」ノ対空戦闘、特筆ニ値ス。/,
     )
     expect(standard.body).not.toContain('矢矧')
+  })
+
+  it('mentions observed anti-submarine contribution and lets strong ASW outrank MVP', () => {
+    const record = normalizeSortieSession(antiSubmarineSortieSession, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: antiSubmarineSortieSession,
+    }
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource,
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+    const short = buildWarReportFromRecord(record, 'short_bulletin', { truthSource })
+
+    expect(formal.body).toMatch(
+      /対潜戦果　「ジョンストン」対潜攻撃(?:二回、敵潜水艦二隻|数回、敵潜水艦)ニ有効打撃。|対潜戦果　対潜攻撃実施、戦果細目後報。/,
+    )
+    expect(formal.body).toContain(
+      '戦闘後判定ニ於テ「ジョンストン」対潜戦果顕著、殊勲艦ト認定。',
+    )
+    expect(formal.body).not.toContain('「アトランタ」殊勲艦')
+    expect(standard.bulletin).toMatch(/対潜戦|敵潜航企図|対潜戦果/)
+    expect(standard.body).toContain(
+      '殊ニ「ジョンストン」ノ対潜戦闘鋭甚ニシテ、敵潜水艦数隻ヲ撃沈破セリ。',
+    )
+    expect(standard.body).toMatch(
+      /「ジョンストン」ノ対潜戦闘、武功顕著ナリ。|「ジョンストン」ノ対潜奮戦、殊勲ト認ム。|「ジョンストン」ノ対潜戦果、特筆ニ値ス。/,
+    )
+    expect(short.body).toContain('「ジョンストン」対潜奮戦、敵潜水艦数隻ヲ掃蕩。')
+
+    for (const text of [formal.body, standard.body, short.body]) {
+      expect(text).not.toMatch(/ASW|api_|opening_taisen|hougeki/)
+    }
+  })
+
+  it('uses one formal observation profile for anti-submarine detail', () => {
+    const surveyed = findFormalReportByProfile(antiSubmarineSortieSession, 'surveyed')
+    const fieldSummary = findFormalReportByProfile(antiSubmarineSortieSession, 'field_summary')
+    const fragmentary = findFormalReportByProfile(antiSubmarineSortieSession, 'fragmentary')
+
+    expect(surveyed.body).toContain(
+      '対潜戦果　「ジョンストン」対潜攻撃二回、敵潜水艦二隻ニ有効打撃。',
+    )
+    expect(fieldSummary.body).toContain(
+      '対潜戦果　「ジョンストン」対潜攻撃数回、敵潜水艦ニ有効打撃。',
+    )
+    expect(fragmentary.body).toContain('対潜戦果　対潜攻撃実施、戦果細目後報。')
+    expect(`${surveyed.body}\n${fieldSummary.body}\n${fragmentary.body}`).not.toMatch(
+      /敵潜水艦.*撃沈(?:ヲ確認|確実ト認ム)/,
+    )
+  })
+
+  it('rewards combined AA and ASW evidence before a single-domain game MVP', () => {
+    const combinedBattle: BattleNodeCapture = {
+      ...antiAirBattle,
+      enemyDeckNameRaw: '敵潜水艦隊 航空支援隊',
+      enemyShipNamesRaw: ['潜水ソ級', '軽母ヌ級'],
+      antiSubmarineSummary: {
+        triggered: true,
+        contributions: [
+          {
+            shipNameRaw: '初月改二',
+            damagingHitCount: 1,
+            targetCount: 1,
+            assessedDamage: 24,
+          },
+          {
+            shipNameRaw: '矢矧改二乙',
+            damagingHitCount: 2,
+            targetCount: 2,
+            assessedDamage: 58,
+          },
+        ],
+      },
+      mvpNameRaw: '矢矧改二乙',
+    }
+    const combinedSortie: SortieSessionCapture = {
+      ...antiAirSortieSession,
+      id: 'sortie-combined-aa-asw-merit',
+      battles: [combinedBattle],
+    }
+    const record = normalizeSortieSession(combinedSortie, 'completed')
+    const truthSource = { kind: 'sortie' as const, sortie: combinedSortie }
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource,
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+
+    expect(formal.body).toContain(
+      '戦闘後判定ニ於テ「初月」防空並対潜戦果顕著、殊勲艦ト認定。',
+    )
+    expect(formal.body).not.toContain('「矢矧」殊勲艦')
+    expect(standard.body).toMatch(
+      /「初月」ノ防空並対潜戦闘、武功顕著ナリ。|「初月」ノ防空対潜両面ニ於ケル奮戦、殊勲ト認ム。|「初月」ノ防空並対潜戦果、特筆ニ値ス。/,
+    )
   })
 
   it('mentions enemy flagship sinking in all document voices without assigning it to a ship', () => {
