@@ -81,7 +81,8 @@ The live line can currently use:
 
 - sortie session from departure to return
 - practice result
-- fleet composition, flagship, and MVP
+- fleet composition, flagship, and one or two official MVPs
+- combined-fleet main and escort rosters
 - broad result category and damage state
 - broad enemy classification and node trail
 - safe battle-context signals
@@ -97,7 +98,8 @@ live capture からは以下を生成できます。
 
 - 出撃から帰投までの sortie session
 - 演習結果
-- 編成、旗艦、MVP
+- 編成、旗艦、一艦または二艦の公式 MVP
+- 聯合艦隊の第一・第二艦隊 roster
 - おおまかな戦果分類と損害状態
 - 大分類としての敵情と node trail
 - 安全に使える battle-context signal
@@ -128,6 +130,30 @@ turning the plugin into a full battle parser.
 
 これらは文書向けの truth event です。完全な battle parser になるためではなく、
 文書側が「見えにくい戦功」を忘れないために使います。
+
+### Combined Fleets
+
+For a 6+6 combined sortie, the plugin captures both the main and escort fleets.
+Daytime and AACI actor indices can therefore resolve to an escort ship instead
+of falling back to anonymous unit credit. Night attribution is named only when
+the packet identifies the active friendly deck; ambiguous ownership remains
+anonymous.
+
+`硬派詳報` lists `第一艦隊` and `第二艦隊` separately. AA and ASW specialists in
+either fleet enter the same merit board, while two official game MVPs receive a
+joint commendation only when no stronger named specialist qualifies. Multiple
+named ASW contributors may support a cooperative unit claim, but the plugin does
+not invent individual submarine kills.
+
+6+6 の聯合艦隊 sortie では、第一艦隊と第二艦隊の両方を capture
+します。昼戦と AACI の actor index は第二艦隊の艦まで解決できます。
+夜戦は active deck が明確な場合だけ艦名付きとし、不明な場合は部隊戦果の
+ままにします。
+
+`硬派詳報` は `第一艦隊` と `第二艦隊` を分けて記載します。どちらの艦隊の
+防空・対潜 specialist も同じ merit board で評価し、より強い具名戦果が
+ない場合のみ二艦の公式 MVP を並記します。複数艦の対潜貢献は協同戦果と
+して扱えますが、各艦の潜水艦撃沈功は捏造しません。
 
 ### Sandbox Documents
 
@@ -469,7 +495,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.17.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.18.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update

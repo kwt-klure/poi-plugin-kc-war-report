@@ -44,6 +44,7 @@ type ResultBody = {
   api_win_rank?: string
   api_quest_name?: string
   api_mvp?: number
+  api_mvp_combined?: number
   api_enemy_info?: {
     api_deck_name?: string
   }
@@ -57,6 +58,7 @@ type BattlePacket = {
   api_e_maxhps_combined?: number[]
   api_f_nowhps_combined?: number[]
   api_f_maxhps_combined?: number[]
+  api_active_deck?: number[]
   api_kouku?: unknown
   api_injection_kouku?: unknown
   api_air_base_attack?: unknown[]
@@ -75,6 +77,7 @@ type CurrentBattleContext = {
   kind: 'sortie' | 'practice'
   mode: BattleMode
   deckId: number
+  combinedFleetType: number
   map: [number, number, number] | null
   nodeLabel: string | null
   fleetShips: FleetShipSnapshot[]
@@ -104,6 +107,7 @@ let practiceOpponent: string | null = null
 let finalizeTimer: ReturnType<typeof setTimeout> | null = null
 let pendingFinalize: PendingFinalize | null = null
 let listening = false
+let combinedFleetType = 0
 
 const toPositiveInteger = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
@@ -120,6 +124,12 @@ const toPositiveInteger = (value: unknown): number | null => {
 
 const getActiveFleetIdFromStore = () =>
   toPositiveInteger(getStoreValue<number | string>(['ui', 'activeFleetId']))
+
+const updateCombinedFleetTypeFromBody = (body: Record<string, unknown>) => {
+  const value = body.api_combined_flag
+  combinedFleetType =
+    typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 0
+}
 
 const resolveDeckIdFromSources = (
   detail: GameResponseDetail,
@@ -181,7 +191,11 @@ const getArrayValue = <T>(value: Record<string, T> | T[] | null | undefined, id:
   return value[String(id)] ?? null
 }
 
-const captureShipSnapshot = (shipInstanceId: number): FleetShipSnapshot | null => {
+const captureShipSnapshot = (
+  shipInstanceId: number,
+  fleetRole: 'main' | 'escort' = 'main',
+  fleetPosition?: number,
+): FleetShipSnapshot | null => {
   const ship = getStoreValue<PoiShip>(['info', 'ships', shipInstanceId])
   if (!ship?.api_ship_id || ship.api_nowhp == null || ship.api_maxhp == null) {
     return null
@@ -209,10 +223,15 @@ const captureShipSnapshot = (shipInstanceId: number): FleetShipSnapshot | null =
     startHp: ship.api_nowhp,
     endHp: null,
     maxHp: ship.api_maxhp,
+    fleetRole,
+    fleetPosition,
   }
 }
 
-const captureFleetSnapshot = (deckId: number): FleetShipSnapshot[] => {
+const captureFleetSnapshot = (
+  deckId: number,
+  fleetRole: 'main' | 'escort' = 'main',
+): FleetShipSnapshot[] => {
   const fleet =
     getStoreValue<PoiFleet>(['info', 'fleets', deckId - 1]) ??
     getStoreValue<PoiFleet>(['info', 'decks', deckId - 1]) ??
@@ -223,7 +242,9 @@ const captureFleetSnapshot = (deckId: number): FleetShipSnapshot[] => {
     (value): value is number => typeof value === 'number' && value > 0,
   )
   return shipIds
-    .map((shipInstanceId) => captureShipSnapshot(shipInstanceId))
+    .map((shipInstanceId, fleetPosition) =>
+      captureShipSnapshot(shipInstanceId, fleetRole, fleetPosition),
+    )
     .filter((ship): ship is FleetShipSnapshot => ship != null)
 }
 
@@ -233,6 +254,39 @@ const captureFleetSnapshotWithFallback = (
 ) => {
   const captured = captureFleetSnapshot(deckId)
   return captured.length > 0 ? captured : cloneFleetSnapshot(fallbackShips)
+}
+
+const captureSortieFleetSnapshotWithFallback = (
+  deckId: number,
+  fleetType: number,
+  fallbackShips: FleetShipSnapshot[] = [],
+) => {
+  const fallbackMain = fallbackShips.filter((ship) => ship.fleetRole !== 'escort')
+  const mainFleet = captureFleetSnapshot(deckId, 'main')
+  const resolvedMain = mainFleet.length > 0 ? mainFleet : cloneFleetSnapshot(fallbackMain)
+
+  if (fleetType <= 0 || deckId !== 1) {
+    return resolvedMain
+  }
+
+  const fallbackEscort = fallbackShips.filter((ship) => ship.fleetRole === 'escort')
+  const escortFleet = captureFleetSnapshot(2, 'escort')
+  const resolvedEscort =
+    escortFleet.length > 0 ? escortFleet : cloneFleetSnapshot(fallbackEscort)
+  return [...resolvedMain, ...resolvedEscort]
+}
+
+const mergeMissingFleetSnapshots = (
+  current: FleetShipSnapshot[],
+  captured: FleetShipSnapshot[],
+) => {
+  const currentIds = new Set(current.map((ship) => ship.instanceId))
+  return [
+    ...cloneFleetSnapshot(current),
+    ...captured
+      .filter((ship) => !currentIds.has(ship.instanceId))
+      .map((ship) => ({ ...ship })),
+  ]
 }
 
 const updateFleetEndHp = (ships: FleetShipSnapshot[]): FleetShipSnapshot[] =>
@@ -246,7 +300,11 @@ const updateFleetEndHp = (ships: FleetShipSnapshot[]): FleetShipSnapshot[] =>
 
 export const refreshFleetSnapshotFromStore = (ships: FleetShipSnapshot[]): FleetShipSnapshot[] =>
   ships.map((ship) => {
-    const latestSnapshot = captureShipSnapshot(ship.instanceId)
+    const latestSnapshot = captureShipSnapshot(
+      ship.instanceId,
+      ship.fleetRole ?? 'main',
+      ship.fleetPosition,
+    )
     if (!latestSnapshot) {
       return ship
     }
@@ -400,6 +458,56 @@ const isSubmarineShipMaster = (master: PoiShipMaster | null) =>
 const sumPositiveNumbers = (values: number[]) =>
   values.reduce((sum, value) => sum + (Number.isFinite(value) && value > 0 ? value : 0), 0)
 
+type FriendlyActorIndexMode = 'flattened' | 'active_main' | 'active_escort' | 'ambiguous'
+
+const getFriendlyShipAtPosition = (
+  fleetShips: FleetShipSnapshot[],
+  role: 'main' | 'escort',
+  position: number,
+) =>
+  fleetShips.find(
+    (ship) => ship.fleetRole === role && ship.fleetPosition === position,
+  ) ?? null
+
+const hasCombinedFleetTopology = (fleetShips: FleetShipSnapshot[]) =>
+  fleetShips.some((ship) => ship.fleetRole === 'main') &&
+  fleetShips.some((ship) => ship.fleetRole === 'escort')
+
+const resolveFriendlyActor = (
+  attackerIndex: number | null,
+  fleetShips: FleetShipSnapshot[],
+  isCombinedFleet: boolean,
+  mode: FriendlyActorIndexMode = 'flattened',
+) => {
+  if (attackerIndex == null || attackerIndex < 0) {
+    return null
+  }
+
+  if (!isCombinedFleet) {
+    return (
+      getFriendlyShipAtPosition(fleetShips, 'main', attackerIndex) ??
+      fleetShips[attackerIndex] ??
+      null
+    )
+  }
+
+  if (!hasCombinedFleetTopology(fleetShips) || mode === 'ambiguous') {
+    return null
+  }
+
+  if (mode === 'active_main' || mode === 'active_escort') {
+    return getFriendlyShipAtPosition(
+      fleetShips,
+      mode === 'active_main' ? 'main' : 'escort',
+      attackerIndex,
+    )
+  }
+
+  return attackerIndex < 6
+    ? getFriendlyShipAtPosition(fleetShips, 'main', attackerIndex)
+    : getFriendlyShipAtPosition(fleetShips, 'escort', attackerIndex - 6)
+}
+
 const extractAntiAirSummaryFromPacket = (
   packet: BattlePacket,
   fleetShips: FleetShipSnapshot[],
@@ -427,10 +535,11 @@ const extractAntiAirSummaryFromPacket = (
   }
 
   const hasFriendlyCombinedFleet = Array.isArray(packet.api_f_nowhps_combined)
-  const triggeringShip =
-    !hasFriendlyCombinedFleet && airFireEvent.idx != null && airFireEvent.idx < fleetShips.length
-      ? fleetShips[airFireEvent.idx] ?? null
-      : null
+  const triggeringShip = resolveFriendlyActor(
+    airFireEvent.idx,
+    fleetShips,
+    hasFriendlyCombinedFleet,
+  )
 
   return {
     triggered: true,
@@ -440,16 +549,28 @@ const extractAntiAirSummaryFromPacket = (
   }
 }
 
-const getBattleShellingPhases = (packet: BattlePacket) =>
-  [
-    packet.api_opening_taisen,
-    packet.api_hougeki1,
-    packet.api_hougeki2,
-    packet.api_hougeki3,
-    packet.api_hougeki,
-    packet.api_n_hougeki1,
-    packet.api_n_hougeki2,
-  ].filter((phase) => phase != null)
+const getActiveFriendlyActorMode = (packet: BattlePacket): FriendlyActorIndexMode =>
+  packet.api_active_deck?.[0] === 1
+    ? 'active_main'
+    : packet.api_active_deck?.[0] === 2
+      ? 'active_escort'
+      : 'ambiguous'
+
+const getBattleShellingPhases = (packet: BattlePacket) => {
+  const activeMode = getActiveFriendlyActorMode(packet)
+  return [
+    { phase: packet.api_opening_taisen, mode: 'flattened' as const },
+    { phase: packet.api_hougeki1, mode: 'flattened' as const },
+    { phase: packet.api_hougeki2, mode: 'flattened' as const },
+    { phase: packet.api_hougeki3, mode: 'flattened' as const },
+    { phase: packet.api_hougeki, mode: activeMode },
+    { phase: packet.api_n_hougeki1, mode: activeMode },
+    { phase: packet.api_n_hougeki2, mode: activeMode },
+  ].filter(
+    (entry): entry is { phase: NonNullable<unknown>; mode: FriendlyActorIndexMode } =>
+      entry.phase != null,
+  )
+}
 
 const toNumberList = (value: unknown): number[] => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -490,7 +611,7 @@ const extractAntiSubmarineSummaryFromPacket = (
   const contributions = new Map<string, AntiSubmarineAccumulator>()
   const hasFriendlyCombinedFleet = Array.isArray(packet.api_f_nowhps_combined)
 
-  for (const phase of getBattleShellingPhases(packet)) {
+  for (const { phase, mode } of getBattleShellingPhases(packet)) {
     if (!phase || typeof phase !== 'object') {
       continue
     }
@@ -535,10 +656,12 @@ const extractAntiSubmarineSummaryFromPacket = (
         continue
       }
 
-      const attacker =
-        !hasFriendlyCombinedFleet && attackerIndex < fleetShips.length
-          ? fleetShips[attackerIndex] ?? null
-          : null
+      const attacker = resolveFriendlyActor(
+        attackerIndex,
+        fleetShips,
+        hasFriendlyCombinedFleet,
+        mode,
+      )
       const shipNameRaw = attacker?.nameJa ?? null
       const key = shipNameRaw ?? '__unattributed__'
       let accumulator = contributions.get(key)
@@ -823,10 +946,41 @@ const buildOperationPhraseRaw = (context: CurrentBattleContext, resultBody: Resu
     ? '対抗演習'
     : resultBody.api_quest_name ?? (buildMapLabel(context.map) ? `${buildMapLabel(context.map)} 海域` : '出撃海域')
 
+const resolveMvpNames = (
+  resultBody: ResultBody,
+  friendlyFleet: FleetShipSnapshot[],
+) => {
+  const names: string[] = []
+  const mainMvpIndex =
+    typeof resultBody.api_mvp === 'number' ? resultBody.api_mvp - 1 : -1
+  const mainMvp =
+    mainMvpIndex >= 0
+      ? getFriendlyShipAtPosition(friendlyFleet, 'main', mainMvpIndex) ??
+        friendlyFleet[mainMvpIndex] ??
+        null
+      : null
+  if (mainMvp?.nameJa) {
+    names.push(mainMvp.nameJa)
+  }
+
+  const escortMvpIndex =
+    typeof resultBody.api_mvp_combined === 'number'
+      ? resultBody.api_mvp_combined - 1
+      : -1
+  const escortMvp =
+    escortMvpIndex >= 0
+      ? getFriendlyShipAtPosition(friendlyFleet, 'escort', escortMvpIndex)
+      : null
+  if (escortMvp?.nameJa && !names.includes(escortMvp.nameJa)) {
+    names.push(escortMvp.nameJa)
+  }
+
+  return names
+}
+
 const buildPracticeCapture = (context: CurrentBattleContext, resultBody: ResultBody): BattleCapture => {
   const friendlyFleet = updateFleetEndHp(context.fleetShips)
-  const mvpIndex = typeof resultBody.api_mvp === 'number' ? resultBody.api_mvp - 1 : -1
-  const mvpShip = mvpIndex >= 0 ? friendlyFleet[mvpIndex] ?? null : null
+  const mvpNameRaw = resolveMvpNames(resultBody, friendlyFleet)[0] ?? null
   const antiAirScreen =
     context.sawAirAttack &&
     friendlyFleet.filter((ship) =>
@@ -854,7 +1008,7 @@ const buildPracticeCapture = (context: CurrentBattleContext, resultBody: ResultB
     antiAirScreen,
     practiceOpponent: context.practiceOpponent,
     flagshipNameRaw: friendlyFleet[0]?.nameJa ?? null,
-    mvpNameRaw: mvpShip?.nameJa ?? null,
+    mvpNameRaw,
   }
 }
 
@@ -863,8 +1017,7 @@ const buildBattleNodeCapture = (
   resultBody: ResultBody,
 ): BattleNodeCapture => {
   const friendlyFleet = updateFleetEndHp(context.fleetShips)
-  const mvpIndex = typeof resultBody.api_mvp === 'number' ? resultBody.api_mvp - 1 : -1
-  const mvpShip = mvpIndex >= 0 ? friendlyFleet[mvpIndex] ?? null : null
+  const mvpNameRaws = resolveMvpNames(resultBody, friendlyFleet)
   const antiAirScreen =
     context.sawAirAttack &&
     friendlyFleet.filter((ship) =>
@@ -903,7 +1056,8 @@ const buildBattleNodeCapture = (
       ? { ...context.enemyFlagshipSunkSummary }
       : null,
     flagshipNameRaw: friendlyFleet[0]?.nameJa ?? null,
-    mvpNameRaw: mvpShip?.nameJa ?? null,
+    mvpNameRaw: mvpNameRaws[0] ?? null,
+    mvpNameRaws,
   }
 }
 
@@ -1062,17 +1216,23 @@ const createSortieSession = (detail: GameResponseDetail, deckId: number): Sortie
   ]
   const timestamp = detail.time ?? Date.now()
   const nodeLabel = buildNodeLabel(detail)
+  const sortieCombinedFleetType = deckId === 1 ? combinedFleetType : 0
+  const fleetSnapshot = captureSortieFleetSnapshotWithFallback(
+    deckId,
+    sortieCombinedFleetType,
+  )
 
   return {
     id: `${timestamp}:${deckId}:${map[0]}-${map[1]}`,
     deckId,
+    combinedFleetType: sortieCombinedFleetType,
     startedAt: timestamp,
     updatedAt: timestamp,
     mapLabel: buildMapLabel(map),
     operationLabelRaw: buildMapLabel(map) ? `${buildMapLabel(map)} 海域` : '出撃海域',
     operationPhraseRaw: buildMapLabel(map) ? `${buildMapLabel(map)} 海域` : '出撃海域',
-    friendlyFleetInitial: captureFleetSnapshotWithFallback(deckId),
-    friendlyFleetLatest: captureFleetSnapshotWithFallback(deckId),
+    friendlyFleetInitial: fleetSnapshot,
+    friendlyFleetLatest: cloneFleetSnapshot(fleetSnapshot),
     nodeTrail: nodeLabel ? [nodeLabel] : [],
     battles: [],
   }
@@ -1117,6 +1277,7 @@ const beginSortieBattleContext = (detail: GameResponseDetail) => {
   }
 
   const resolvedDeckId = currentSortie?.deckId ?? deckId
+  const resolvedCombinedFleetType = currentSortie?.combinedFleetType ?? 0
   const fallbackFleet =
     currentSortie?.friendlyFleetLatest.length
       ? currentSortie.friendlyFleetLatest
@@ -1127,9 +1288,14 @@ const beginSortieBattleContext = (detail: GameResponseDetail) => {
     kind: 'sortie',
     mode: Number(detail.body.api_event_id) === 5 ? 'boss' : 'normal',
     deckId: resolvedDeckId,
+    combinedFleetType: resolvedCombinedFleetType,
     map,
     nodeLabel,
-    fleetShips: captureFleetSnapshotWithFallback(resolvedDeckId, fallbackFleet),
+    fleetShips: captureSortieFleetSnapshotWithFallback(
+      resolvedDeckId,
+      resolvedCombinedFleetType,
+      fallbackFleet,
+    ),
     practiceOpponent: null,
     enemyShipIds: [],
     sawAirAttack: false,
@@ -1150,6 +1316,7 @@ const beginPracticeBattleContext = (detail: GameResponseDetail) => {
     kind: 'practice',
     mode: 'practice',
     deckId,
+    combinedFleetType: 0,
     map: null,
     nodeLabel: null,
     fleetShips: captureFleetSnapshot(deckId),
@@ -1163,10 +1330,61 @@ const beginPracticeBattleContext = (detail: GameResponseDetail) => {
   }
 }
 
+const resolveCombinedFleetTypeFromPacket = (
+  currentFleetType: number,
+  packet: BattlePacket,
+) =>
+  Array.isArray(packet.api_f_nowhps_combined)
+    ? Math.max(1, currentFleetType)
+    : currentFleetType
+
+const ensureCombinedFleetCaptureFromPacket = (packet: BattlePacket) => {
+  if (
+    !currentBattle ||
+    currentBattle.kind !== 'sortie' ||
+    currentBattle.deckId !== 1 ||
+    !Array.isArray(packet.api_f_nowhps_combined)
+  ) {
+    return
+  }
+
+  const resolvedFleetType = resolveCombinedFleetTypeFromPacket(
+    Math.max(
+      currentBattle.combinedFleetType,
+      currentSortie?.combinedFleetType ?? 0,
+    ),
+    packet,
+  )
+  const captured = captureSortieFleetSnapshotWithFallback(
+    currentBattle.deckId,
+    resolvedFleetType,
+    currentBattle.fleetShips,
+  )
+  currentBattle.combinedFleetType = resolvedFleetType
+  currentBattle.fleetShips = captured
+
+  if (!currentSortie) {
+    return
+  }
+
+  currentSortie = {
+    ...currentSortie,
+    combinedFleetType: resolvedFleetType,
+    friendlyFleetInitial: mergeMissingFleetSnapshots(
+      currentSortie.friendlyFleetInitial,
+      captured,
+    ),
+    friendlyFleetLatest: captured,
+  }
+  persistCurrentSortie()
+}
+
 const updateCurrentBattleFromPacket = (packet: BattlePacket) => {
   if (!currentBattle) {
     return
   }
+
+  ensureCombinedFleetCaptureFromPacket(packet)
 
   if (packet.api_ship_ke && currentBattle.enemyShipIds.length === 0) {
     currentBattle.enemyShipIds = packet.api_ship_ke
@@ -1216,7 +1434,13 @@ const handleGameResponse = (event: Event) => {
     return
   }
 
+  if (detail.path === '/kcsapi/api_start2/getData') {
+    updateCombinedFleetTypeFromBody(detail.body)
+    return
+  }
+
   if (detail.path === '/kcsapi/api_port/port') {
+    updateCombinedFleetTypeFromBody(detail.body)
     updateDetectedAdmiralFromBody(
       (detail.body.api_basic as Record<string, unknown> | undefined) ?? detail.body,
     )
@@ -1281,6 +1505,26 @@ export const __resolveDeckIdForTests = (
   detail: GameResponseDetail,
   sources: DeckResolutionSources = {},
 ) => resolveDeckIdFromSources(detail, sources)
+
+export const __captureSortieFleetSnapshotForTests = (
+  deckId: number,
+  fleetType: number,
+) => captureSortieFleetSnapshotWithFallback(deckId, fleetType)
+
+export const __captureSortieFleetSnapshotForPacketForTests = (
+  deckId: number,
+  fleetType: number,
+  packet: BattlePacket,
+) =>
+  captureSortieFleetSnapshotWithFallback(
+    deckId,
+    resolveCombinedFleetTypeFromPacket(fleetType, packet),
+  )
+
+export const __resolveMvpNamesForTests = (
+  resultBody: ResultBody,
+  fleetShips: FleetShipSnapshot[],
+) => resolveMvpNames(resultBody, fleetShips)
 
 export const __detectAirAttackFromPacketForTests = (packet: BattlePacket) =>
   detectAirAttackFromPacket(packet)

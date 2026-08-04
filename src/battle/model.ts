@@ -567,6 +567,9 @@ export const normalizePracticeCapture = (capture: BattleCapture): NormalizedWarR
       ? normalizeFriendlyReportName(capture.flagshipNameRaw)
       : null,
     mvpName: capture.mvpNameRaw ? normalizeFriendlyReportName(capture.mvpNameRaw) : null,
+    mvpNames: capture.mvpNameRaw
+      ? [normalizeFriendlyReportName(capture.mvpNameRaw)]
+      : [],
     practiceOpponent: capture.practiceOpponent,
     winRank: capture.winRank,
     sawAirAttack: capture.sawAirAttack,
@@ -605,7 +608,21 @@ export const normalizeSortieSession = (
   const flagshipNameRaw =
     session.friendlyFleetInitial[0]?.nameJa ??
     getLatestNonNull(session.battles.map((battle) => battle.flagshipNameRaw))
-  const mvpNameRaw = getLatestNonNull(session.battles.map((battle) => battle.mvpNameRaw))
+  const latestMvpBattle = [...session.battles]
+    .reverse()
+    .find(
+      (battle) =>
+        (battle.mvpNameRaws?.length ?? 0) > 0 || battle.mvpNameRaw != null,
+    )
+  const mvpNameRaws = Array.from(
+    new Set(
+      (
+        latestMvpBattle?.mvpNameRaws ??
+        (latestMvpBattle?.mvpNameRaw ? [latestMvpBattle.mvpNameRaw] : [])
+      ).map((name) => normalizeFriendlyReportName(name)),
+    ),
+  )
+  const mvpNameRaw = mvpNameRaws[0] ?? null
   const winRank = status === 'failed' ? null : lastBattle?.winRank ?? null
 
   return {
@@ -635,11 +652,12 @@ export const normalizeSortieSession = (
     damageSummary: finalDamageSummary,
     highlightFlags: {
       antiAirScreen: session.battles.some((battle) => battle.antiAirScreen),
-      mvpHighlighted: mvpNameRaw != null,
+      mvpHighlighted: mvpNameRaws.length > 0,
     },
     entityRenderPolicy: 'direct_name_alias',
     flagshipName: flagshipNameRaw ? normalizeFriendlyReportName(flagshipNameRaw) : null,
-    mvpName: mvpNameRaw ? normalizeFriendlyReportName(mvpNameRaw) : null,
+    mvpName: mvpNameRaw,
+    mvpNames: mvpNameRaws,
     practiceOpponent: null,
     winRank,
     sawAirAttack,

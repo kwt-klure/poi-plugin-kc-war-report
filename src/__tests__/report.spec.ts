@@ -251,6 +251,87 @@ const antiSubmarineSortieSession: SortieSessionCapture = {
   battles: [antiSubmarineBattle],
 }
 
+const combinedFleetShips: FleetShipSnapshot[] = [
+  ['長門改二', 8, '戦艦'],
+  ['陸奥改二', 8, '戦艦'],
+  ['鳥海改二', 5, '重巡洋艦'],
+  ['千歳航改二', 7, '軽空母'],
+  ['千代田航改二', 7, '軽空母'],
+  ['龍田改二', 3, '軽巡洋艦'],
+  ['天津風改二', 2, '駆逐艦'],
+  ['阿武隈改二', 3, '軽巡洋艦'],
+  ['朝霜改', 2, '駆逐艦'],
+  ['冬月改', 2, '駆逐艦'],
+  ['霞改二', 2, '駆逐艦'],
+  ['大井改二', 4, '重雷装巡洋艦'],
+].map(([nameJa, typeId, typeNameJa], index) => ({
+  instanceId: 500 + index,
+  shipId: 1500 + index,
+  nameJa: String(nameJa),
+  typeId: Number(typeId),
+  typeNameJa: String(typeNameJa),
+  level: 99,
+  startHp: 40,
+  endHp: 40,
+  maxHp: 40,
+  fleetRole: index < 6 ? 'main' : 'escort',
+  fleetPosition: index % 6,
+}))
+
+const combinedFleetBattle: BattleNodeCapture = {
+  ...antiAirBattle,
+  occurredAt: Date.UTC(2026, 7, 4, 15, 17, 0),
+  nodeLabel: 'Node 43',
+  operationLabelRaw: '南沙諸島沖/オルモック沖/サンベルナルジノ海峡沖',
+  operationPhraseRaw: '南沙諸島沖/オルモック沖/サンベルナルジノ海峡沖',
+  friendlyFleet: combinedFleetShips,
+  enemyDeckNameRaw: '深海任務部隊 空母機動部隊',
+  enemyShipNamesRaw: ['試作空母姫', '軽母ヌ級改'],
+  damageSummary: buildDamageAssessment(combinedFleetShips),
+  antiAirSummary: {
+    triggered: true,
+    shipNameRaw: '冬月改',
+    ciKind: 1,
+    enemyPlaneLoss: 120,
+  },
+  antiSubmarineSummary: {
+    triggered: true,
+    contributions: [
+      {
+        shipNameRaw: '阿武隈改二',
+        damagingHitCount: 1,
+        targetCount: 1,
+        assessedDamage: 44,
+      },
+      {
+        shipNameRaw: '朝霜改',
+        damagingHitCount: 1,
+        targetCount: 1,
+        assessedDamage: 37,
+      },
+    ],
+  },
+  carrierAirLossSummary: null,
+  flagshipNameRaw: '長門改二',
+  mvpNameRaw: '長門改二',
+  mvpNameRaws: ['長門改二', '大井改二'],
+}
+
+const combinedFleetSortieSession: SortieSessionCapture = {
+  ...antiAirSortieSession,
+  id: 'sortie-combined-fleet-attribution',
+  startedAt: Date.UTC(2026, 7, 4, 15, 5, 0),
+  updatedAt: Date.UTC(2026, 7, 4, 15, 17, 0),
+  mapLabel: '62-2',
+  operationLabelRaw: '南沙諸島沖/オルモック沖/サンベルナルジノ海峡沖',
+  operationPhraseRaw: '南沙諸島沖/オルモック沖/サンベルナルジノ海峡沖',
+  friendlyFleetInitial: combinedFleetShips,
+  friendlyFleetLatest: combinedFleetShips,
+  nodeTrail: ['Node 45', 'Node 24', 'Node 43'],
+  battles: [combinedFleetBattle],
+  combinedFleetType: 2,
+}
+
 type FormalObservationProfileIdForTest = 'surveyed' | 'field_summary' | 'fragmentary'
 
 const renderFormalSortie = (session: SortieSessionCapture, variantSeed: number) =>
@@ -777,6 +858,69 @@ describe('war report sortie architecture', () => {
     expect(formal.body).not.toContain('「矢矧」殊勲艦')
     expect(standard.body).toMatch(
       /「初月」ノ防空並対潜戦闘、武功顕著ナリ。|「初月」ノ防空対潜両面ニ於ケル奮戦、殊勲ト認ム。|「初月」ノ防空並対潜戦果、特筆ニ値ス。/,
+    )
+  })
+
+  it('attributes combined-fleet specialist evidence across 6+6 ships', () => {
+    const record = normalizeSortieSession(combinedFleetSortieSession, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: combinedFleetSortieSession,
+    }
+    const formal = findFormalReportByProfile(combinedFleetSortieSession, 'surveyed')
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+
+    expect(record.friendlyFleet).toHaveLength(12)
+    expect(record.mvpNames).toEqual(['長門', '大井'])
+    expect(formal.body).toContain(
+      '第一艦隊　戦艦二隻、重巡洋艦一隻、軽空母二隻、軽巡洋艦一隻。',
+    )
+    expect(formal.body).toContain(
+      '第二艦隊　駆逐艦四隻、軽巡洋艦一隻、重雷装巡洋艦一隻。',
+    )
+    expect(formal.body).toContain(
+      '対潜戦果　「阿武隈」対潜攻撃一回、敵潜水艦一隻ニ有効打撃。',
+    )
+    expect(formal.body).toContain(
+      '対潜戦果　「朝霜」対潜攻撃一回、敵潜水艦一隻ニ有効打撃。',
+    )
+    expect(formal.body).toContain(
+      '戦闘後判定ニ於テ「冬月」防空戦果顕著、殊勲艦ト認定。',
+    )
+    expect(standard.body).toContain('現在迄ニ判明セル戦果概ネ左ノ如シ。')
+    expect(standard.body).toMatch(
+      /「阿武隈」及「朝霜」(?:協同ノ対潜戦闘鋭甚ニシテ|対潜戦闘ニ協同シ)、敵潜水艦数隻ヲ撃沈破セリ。/,
+    )
+    expect(standard.body).toMatch(
+      /「冬月」ノ防空戦闘、武功顕著ナリ。|「冬月」ノ防空奮戦、殊勲ト認ム。|「冬月」ノ対空戦闘、特筆ニ値ス。/,
+    )
+    expect(standard.body).not.toMatch(/「長門」ノ戦働、殊勲|「大井」ノ戦働、殊勲/)
+  })
+
+  it('uses a joint commendation when a combined fleet has two MVPs and no specialist', () => {
+    const mvpOnlyBattle: BattleNodeCapture = {
+      ...combinedFleetBattle,
+      antiAirSummary: null,
+      antiSubmarineSummary: null,
+    }
+    const mvpOnlySortie: SortieSessionCapture = {
+      ...combinedFleetSortieSession,
+      id: 'sortie-combined-fleet-dual-mvp',
+      battles: [mvpOnlyBattle],
+    }
+    const record = normalizeSortieSession(mvpOnlySortie, 'completed')
+    const truthSource = { kind: 'sortie' as const, sortie: mvpOnlySortie }
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource,
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+
+    expect(formal.body).toContain(
+      '戦闘後判定ニ於テ「長門」及「大井」両艦ヲ殊勲艦ト認定。',
+    )
+    expect(standard.body).toMatch(
+      /「長門」及「大井」両艦ノ奮戦、武功顕著ナリ。|「長門」及「大井」ノ戦働、殊勲ト認ム。|本行動ニ於ケル「長門」及「大井」ノ奮迅、特筆ニ値ス。/,
     )
   })
 

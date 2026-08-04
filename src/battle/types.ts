@@ -115,6 +115,8 @@ export type FleetShipSnapshot = {
   startHp: number
   endHp: number | null
   maxHp: number
+  fleetRole?: 'main' | 'escort'
+  fleetPosition?: number
 }
 
 export type DamageSummary = {
@@ -183,6 +185,7 @@ export type BattleNodeCapture = {
   enemyFlagshipSunkSummary?: EnemyFlagshipSunkSummary | null
   flagshipNameRaw: string | null
   mvpNameRaw: string | null
+  mvpNameRaws?: string[]
 }
 
 export type BattleCapture = {
@@ -207,6 +210,7 @@ export type BattleCapture = {
 export type SortieSessionCapture = {
   id: string
   deckId?: number
+  combinedFleetType?: number
   startedAt: number
   updatedAt: number
   mapLabel: string | null
@@ -250,6 +254,7 @@ export type NormalizedWarReportRecord = {
   entityRenderPolicy: EntityRenderPolicy
   flagshipName: string | null
   mvpName: string | null
+  mvpNames?: string[]
   practiceOpponent: string | null
   winRank: string | null
   sawAirAttack: boolean
@@ -276,6 +281,7 @@ export type ReportRenderContext = {
   flagshipDisplay: string | null
   flagshipTypeDisplay: string | null
   mvpDisplay: string | null
+  mvpDisplays: string[]
   damageSeverity: DamageSeverity
   damageLabel: string
   damageDetail: string

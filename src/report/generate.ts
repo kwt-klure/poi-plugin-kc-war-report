@@ -1,4 +1,5 @@
 import {
+  buildFleetCompositionText,
   getDamageStateLabel,
   normalizeFriendlyReportName,
   toSimpleKanji,
@@ -103,6 +104,7 @@ type PublicAntiAirEvidence = {
 type PublicAntiSubmarineEvidence = {
   triggered: boolean
   shipName: string | null
+  shipNames: string[]
   damagingHitCount: number
   targetCount: number
   assessedDamage: number
@@ -147,11 +149,13 @@ type StandardClaimBoard = {
 
 type DistinguishedCredit = {
   shipName: string
+  shipNames?: string[]
   basis:
     | 'combined_specialist'
     | 'anti_air_high'
     | 'anti_submarine_high'
     | 'mvp'
+    | 'joint_mvp'
     | 'anti_air'
     | 'anti_submarine'
 }
@@ -508,11 +512,29 @@ const buildSortieAntiSubmarineAggregate = (truthSource: WarReportTruthSource | n
     return null
   }
 
-  const primaryNamed = contributions.find((contribution) => contribution.shipName != null)
-  const primary = primaryNamed ?? contributions[0]!
+  const shipNames = Array.from(
+    new Set(
+      contributions
+        .map((contribution) => contribution.shipName)
+        .filter((shipName): shipName is string => shipName != null),
+    ),
+  )
   return {
     triggered: true,
-    ...primary,
+    shipName: shipNames.length === 1 ? shipNames[0]! : null,
+    shipNames,
+    damagingHitCount: contributions.reduce(
+      (sum, contribution) => sum + contribution.damagingHitCount,
+      0,
+    ),
+    targetCount: contributions.reduce(
+      (sum, contribution) => sum + contribution.targetCount,
+      0,
+    ),
+    assessedDamage: contributions.reduce(
+      (sum, contribution) => sum + contribution.assessedDamage,
+      0,
+    ),
   }
 }
 
@@ -576,6 +598,15 @@ const buildPublicClaimEvidence = (
 
 const formatEnemyFlagshipTarget = (enemyNameRaw: string | null | undefined) =>
   enemyNameRaw ? `敵旗艦「${enemyNameRaw}」` : '敵旗艦'
+
+const formatFriendlyShipGroup = (shipNames: string[]) =>
+  shipNames.length === 2
+    ? `「${shipNames[0]}」及「${shipNames[1]}」`
+    : shipNames.length > 2
+      ? `「${shipNames[0]}」等${toFormalKansuji(shipNames.length)}艦`
+      : shipNames[0]
+        ? `「${shipNames[0]}」`
+        : ''
 
 const hasFavorablePublicDamage = (context: ReportRenderContext) =>
   context.damageSeverity === 'none' || context.damageSeverity === 'light'
@@ -817,9 +848,14 @@ const buildStandardClaimBoard = (
 
   if (evidence.antiSubmarine?.triggered) {
     const target = evidence.antiSubmarine.targetCount >= 2 ? '敵潜水艦数隻' : '敵潜水艦'
-    const sentence = evidence.antiSubmarine.shipName
-      ? `殊ニ「${evidence.antiSubmarine.shipName}」ノ対潜戦闘鋭甚ニシテ、${target}ヲ撃沈破セリ。`
-      : `対潜攻撃ニ依リ、${target}ヲ撃沈破セリ。`
+    const sentence =
+      evidence.antiSubmarine.shipNames.length > 1
+        ? `${formatFriendlyShipGroup(
+            evidence.antiSubmarine.shipNames,
+          )}協同ノ対潜戦闘鋭甚ニシテ、${target}ヲ撃沈破セリ。`
+        : evidence.antiSubmarine.shipName
+          ? `殊ニ「${evidence.antiSubmarine.shipName}」ノ対潜戦闘鋭甚ニシテ、${target}ヲ撃沈破セリ。`
+          : `対潜攻撃ニ依リ、${target}ヲ撃沈破セリ。`
     items.push({
       kind: 'anti_submarine',
       sentence,
@@ -902,6 +938,9 @@ const buildShortAntiSubmarineBullet = (truthSource: WarReportTruthSource | null)
   }
 
   const target = aggregate.targetCount >= 2 ? '敵潜水艦数隻' : '敵潜水艦'
+  if (aggregate.shipNames.length > 1) {
+    return `${formatFriendlyShipGroup(aggregate.shipNames)}対潜協同、${target}ヲ掃蕩。`
+  }
   if (aggregate.shipName) {
     return aggregate.damagingHitCount >= 2 || aggregate.targetCount >= 2
       ? `「${aggregate.shipName}」対潜奮戦、${target}ヲ掃蕩。`
@@ -1276,6 +1315,24 @@ const buildFormalFlagshipListing = (context: ReportRenderContext) => {
     : `旗艦「${flagshipDisplay}」`
 }
 
+const buildFormalParticipationLines = (context: ReportRenderContext) => {
+  const escortFleet = context.friendlyFleet.filter(
+    (ship) => ship.fleetRole === 'escort',
+  )
+  if (escortFleet.length === 0) {
+    return [`　${context.friendlySummary}。${buildFormalFlagshipListing(context)}。`]
+  }
+
+  const mainFleet = context.friendlyFleet.filter(
+    (ship) => ship.fleetRole !== 'escort',
+  )
+  return [
+    `　第一艦隊　${buildFleetCompositionText(mainFleet)}。`,
+    `　第二艦隊　${buildFleetCompositionText(escortFleet)}。`,
+    `　${buildFormalFlagshipListing(context)}。`,
+  ]
+}
+
 type MeritCandidate = {
   shipName: string
   antiAirStrength: number
@@ -1322,6 +1379,15 @@ const selectDistinguishedCredit = (
   truthSource: WarReportTruthSource | null,
 ): DistinguishedCredit | null => {
   const candidates = new Map<string, MeritCandidate>()
+  const officialMvpNames = Array.from(
+    new Set(
+      context.mvpDisplays.length > 0
+        ? context.mvpDisplays
+        : context.mvpDisplay
+          ? [context.mvpDisplay]
+          : [],
+    ),
+  )
   const fleetOrder = new Map(
     context.friendlyFleet.map((ship, index) => [normalizeFriendlyReportName(ship.nameJa), index]),
   )
@@ -1334,7 +1400,7 @@ const selectDistinguishedCredit = (
       shipName,
       antiAirStrength: 0,
       antiSubmarineStrength: 0,
-      isMvp: shipName === context.mvpDisplay,
+      isMvp: officialMvpNames.includes(shipName),
       fleetOrder: fleetOrder.get(shipName) ?? Number.MAX_SAFE_INTEGER,
     }
     candidates.set(shipName, created)
@@ -1358,8 +1424,8 @@ const selectDistinguishedCredit = (
     )
   }
 
-  if (context.mvpDisplay) {
-    getCandidate(context.mvpDisplay).isMvp = true
+  for (const mvpName of officialMvpNames) {
+    getCandidate(mvpName).isMvp = true
   }
 
   const ranked = Array.from(candidates.values()).sort((left, right) => {
@@ -1391,9 +1457,17 @@ const selectDistinguishedCredit = (
     }
   }
 
-  if (context.mvpDisplay) {
+  if (officialMvpNames.length > 1) {
     return {
-      shipName: context.mvpDisplay,
+      shipName: officialMvpNames[0]!,
+      shipNames: officialMvpNames,
+      basis: 'joint_mvp',
+    }
+  }
+
+  if (officialMvpNames.length === 1) {
+    return {
+      shipName: officialMvpNames[0]!,
       basis: 'mvp',
     }
   }
@@ -1414,14 +1488,34 @@ const buildMvpClause = (
   seed: number,
   slot: string,
 ) => {
-  if (!context.mvpDisplay) {
+  const mvpNames = Array.from(
+    new Set(
+      context.mvpDisplays.length > 0
+        ? context.mvpDisplays
+        : context.mvpDisplay
+          ? [context.mvpDisplay]
+          : [],
+    ),
+  )
+  if (mvpNames.length === 0) {
     return ''
   }
 
+  if (mvpNames.length > 1) {
+    const group = formatFriendlyShipGroup(mvpNames)
+    return `${pickVariant(seed, slot, [
+      `${group}両艦ノ奮戦、武功顕著ナリ。`,
+      `${group}ノ戦働、殊勲ト認ム。`,
+      `本行動ニ於ケル${group}ノ奮迅、特筆ニ値ス。`,
+    ])} `
+  }
+
+  const mvpDisplay = mvpNames[0]!
+
   return `${pickVariant(seed, slot, [
-    `殊ニ「${context.mvpDisplay}」ノ奮戦、武功顕著ナリ。`,
-    `「${context.mvpDisplay}」ノ戦働、殊勲ト認ム。`,
-    `本行動ニ於ケル「${context.mvpDisplay}」ノ奮迅、特筆ニ値ス。`,
+    `殊ニ「${mvpDisplay}」ノ奮戦、武功顕著ナリ。`,
+    `「${mvpDisplay}」ノ戦働、殊勲ト認ム。`,
+    `本行動ニ於ケル「${mvpDisplay}」ノ奮迅、特筆ニ値ス。`,
   ])} `
 }
 
@@ -1436,7 +1530,7 @@ const buildStandardDistinguishedClause = (
     return ''
   }
 
-  if (credit.basis === 'mvp') {
+  if (credit.basis === 'mvp' || credit.basis === 'joint_mvp') {
     return buildMvpClause(context, seed, slot)
   }
 
@@ -3368,7 +3462,11 @@ const buildFormalFindings = (
   const lines = [`　${familyText}`]
   const credit = selectDistinguishedCredit(context, truthSource)
   const distinguishedLine = credit
-    ? credit.basis === 'combined_specialist'
+    ? credit.basis === 'joint_mvp'
+      ? `　戦闘後判定ニ於テ${formatFriendlyShipGroup(
+          credit.shipNames ?? [credit.shipName],
+        )}両艦ヲ殊勲艦ト認定。`
+      : credit.basis === 'combined_specialist'
       ? `　戦闘後判定ニ於テ「${credit.shipName}」防空並対潜戦果顕著、殊勲艦ト認定。`
       : credit.basis === 'anti_air_high'
         ? `　戦闘後判定ニ於テ「${credit.shipName}」防空戦果顕著、殊勲艦ト認定。`
@@ -3609,7 +3707,7 @@ const buildFormalPracticeBody = (
     `　${toJapaneseDate(context.occurredAt)}、対抗演習ヲ実施セリ。`,
     `　${missionOverview}`,
     '二、参加兵力。',
-    `　${context.friendlySummary}。${buildFormalFlagshipListing(context)}。`,
+    ...buildFormalParticipationLines(context),
     '三、敵情。',
     `　${enemySummaryLabel}　${enemySummary}`,
     '四、経過。',
@@ -3647,7 +3745,7 @@ const buildFormalSortieBody = (
     `　${toJapaneseDate(context.occurredAt)}、${context.operationPhrase}方面ニ於テ行動。`,
     `　${missionOverview}`,
     '二、参加兵力。',
-    `　${context.friendlySummary}。${buildFormalFlagshipListing(context)}。`,
+    ...buildFormalParticipationLines(context),
     '三、敵情。',
     `　${enemySummaryLabel}　${buildEncounterObject(context)}。`,
     `　交戦点数　${toFormalKansuji(Math.max(context.nodeCount, 1))}。`,

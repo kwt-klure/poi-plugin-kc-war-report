@@ -1,5 +1,52 @@
 # Patch Notes
 
+## 0.4.18
+
+This patch teaches the report which half of a combined fleet actually did the
+interesting work. A 6+6 sortie now retains both fleets, resolves bounded
+daytime and active-deck actor indices, and considers both official MVPs without
+letting either one erase stronger named AA or ASW evidence.
+
+この patch は、聯合艦隊のどちら側が面白い戦果を上げたのかを report に
+覚えさせます。6+6 sortie で両艦隊を保持し、bounded な昼戦・active-deck
+actor index を解決し、二艦の公式 MVP も読みます。ただし、艦名付きの強い
+防空・対潜戦果があれば、従来どおりそちらを殊勲とします。
+
+### Changed
+
+- `combined-fleet truth capture`
+  - captures deck 1 as the main fleet and deck 2 as the escort fleet
+  - recovers combined topology from visible packet fields when the earlier fleet flag was missed
+  - maps daytime and AACI indices across the 6+6 roster
+  - maps night actors only when `api_active_deck` makes ownership unambiguous
+  - preserves anonymous unit evidence when snapshots or ownership are incomplete
+- `AA / ASW merit`
+  - credits named escort-fleet AACI and ASW actors when the packet supports it
+  - retains separate ASW contributions while allowing a cooperative public unit claim
+  - keeps specialist-first merit selection across both fleets
+- `MVP`
+  - reads both `api_mvp` and `api_mvp_combined`
+  - renders a joint fallback commendation when two official MVPs exist and no stronger specialist qualifies
+  - keeps older single-MVP history compatible
+- `report rendering`
+  - lists `第一艦隊` and `第二艦隊` separately in `硬派詳報`
+  - includes all twelve ships in composition and return-state damage assessment
+  - keeps `標準公報` aggregate and toy-first while surfacing the actual named specialist
+- `runtime boundary`
+  - installation and process control remain separate; this patch does not require automatic Poi UI control, reload, or restart
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand src/__tests__/runtime.spec.ts src/__tests__/report.spec.ts
+npm test -- --runInBand
+npm run typeCheck
+npm pack --dry-run
+git diff --check
+```
+
 ## 0.4.17
 
 This patch adds a bounded anti-submarine contribution signal and lets the report

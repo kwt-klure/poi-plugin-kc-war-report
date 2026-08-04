@@ -25,8 +25,9 @@ const hashString = (input: string) => {
 export const createVariantSeed = (
   record: NormalizedWarReportRecord,
   truthSource?: WarReportTruthSource | null,
-) =>
-  hashString(
+) => {
+  const mvpNames = record.mvpNames ?? (record.mvpName ? [record.mvpName] : [])
+  return hashString(
     JSON.stringify({
       occurredAt: record.occurredAt,
       kind: record.kind,
@@ -39,6 +40,7 @@ export const createVariantSeed = (
       failureMode: record.failureMode,
       damageSeverity: record.damageSummary.severity,
       mvpName: record.mvpName,
+      ...(mvpNames.length > 1 ? { mvpNames } : {}),
       flagshipName: record.flagshipName,
       nodeCount: record.nodeCount,
       nodeTrail:
@@ -50,6 +52,7 @@ export const createVariantSeed = (
       truthKind: truthSource?.kind ?? null,
     }),
   )
+}
 
 const getDefaultAddressSnapshot = (): AddressSnapshot => buildFormalAddressSnapshot()
 

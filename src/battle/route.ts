@@ -126,6 +126,7 @@ export const routeWarRecord = (record: NormalizedWarReportRecord): ReportRenderC
   flagshipDisplay: record.flagshipName,
   flagshipTypeDisplay: getFlagshipTypeLabel(record.friendlyFleet, record.flagshipName),
   mvpDisplay: record.mvpName,
+  mvpDisplays: record.mvpNames ?? (record.mvpName ? [record.mvpName] : []),
   damageSeverity: record.damageSummary.severity,
   damageLabel: record.damageSummary.label,
   damageDetail: record.damageSummary.detail,
