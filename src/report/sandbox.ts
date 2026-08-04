@@ -1,6 +1,7 @@
 import {
   buildDamageAssessment,
   buildFleetCompositionText,
+  getFlagshipTypeLabel,
   normalizeFriendlyReportName,
   toSimpleKanji,
   normalizeSortieSession,
@@ -425,29 +426,38 @@ const buildReferenceReport = (
   preset: SandboxScenarioPreset,
   record: NormalizedWarReportRecord,
   generatedAt: number,
-): GeneratedWarReport => ({
-  bulletin: ['戦闘参考詳報', dateToJapanese(generatedAt), `於 ${preset.operationPhraseRaw}`].join('\n'),
-  body: [
-    `件名：${preset.operationPhraseRaw}ニ於ケル${preset.referenceSubject}`,
-    '',
-    '一、目的。',
-    `　${preset.referencePurpose}`,
-    '二、我方兵力概況。',
-    `　${buildFleetCompositionText(record.friendlyFleet)}。旗艦「${record.flagshipName ?? normalizeFriendlyReportName(preset.flagshipNameRaw)}」。`,
-    '三、敵情総括。',
-    `　敵情総括　${enemyDisplayByCategory[record.enemyCategory]}ヲ擁スル敵部隊。`,
-    ...preset.referenceHighlights.map((line) => `　${line}`),
-    '四、交戦想定。',
-    `　想定交戦点数　${toSimpleKanji(Math.max(record.nodeCount, 1))}。`,
-    `　主想定口径　${preset.publicHooks.join('／')}。`,
-    '五、所見。',
-    '　既知資料相互参照ノ上、行動準備ニ資スル参考ト認ム。',
-    '六、附記。',
-    '　本資料ハ海域既知情報ヲ基礎トスル参考資料ニシテ、実況詳報ニ非ズ。',
-    '',
-    '以上',
-  ].join('\n'),
-})
+): GeneratedWarReport => {
+  const flagshipName =
+    record.flagshipName ?? normalizeFriendlyReportName(preset.flagshipNameRaw)
+  const flagshipType = getFlagshipTypeLabel(record.friendlyFleet, record.flagshipName)
+  const flagshipListing = flagshipType
+    ? `旗艦、${flagshipType}「${flagshipName}」`
+    : `旗艦「${flagshipName}」`
+
+  return {
+    bulletin: ['戦闘参考詳報', dateToJapanese(generatedAt), `於 ${preset.operationPhraseRaw}`].join('\n'),
+    body: [
+      `件名：${preset.operationPhraseRaw}ニ於ケル${preset.referenceSubject}`,
+      '',
+      '一、目的。',
+      `　${preset.referencePurpose}`,
+      '二、我方兵力概況。',
+      `　${buildFleetCompositionText(record.friendlyFleet)}。${flagshipListing}。`,
+      '三、敵情総括。',
+      `　敵情総括　${enemyDisplayByCategory[record.enemyCategory]}ヲ擁スル敵部隊。`,
+      ...preset.referenceHighlights.map((line) => `　${line}`),
+      '四、交戦想定。',
+      `　想定交戦点数　${toSimpleKanji(Math.max(record.nodeCount, 1))}。`,
+      `　主想定口径　${preset.publicHooks.join('／')}。`,
+      '五、所見。',
+      '　既知資料相互参照ノ上、行動準備ニ資スル参考ト認ム。',
+      '六、附記。',
+      '　本資料ハ海域既知情報ヲ基礎トスル参考資料ニシテ、実況詳報ニ非ズ。',
+      '',
+      '以上',
+    ].join('\n'),
+  }
+}
 
 const buildPlanningMemo = (
   preset: SandboxScenarioPreset,

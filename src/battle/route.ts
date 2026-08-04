@@ -1,3 +1,4 @@
+import { getFlagshipTypeLabel } from './model'
 import type { NormalizedWarReportRecord, ReportRenderContext } from './types'
 
 const getResultPhrase = (record: NormalizedWarReportRecord) => {
@@ -43,7 +44,13 @@ const buildOpeningEnemyClause = (record: NormalizedWarReportRecord) => {
 
 const buildCompositionSentence = (record: NormalizedWarReportRecord) => {
   const flagshipDisplay = record.flagshipName ?? '不詳'
-  const base = `当時我部隊兵力ハ、${record.friendlySummary}ヲ基幹トスル兵力ニシテ、旗艦「${flagshipDisplay}」ノ指揮ノ下、沈着機敏ニ行動セリ。`
+  const flagshipTypeDisplay = getFlagshipTypeLabel(record.friendlyFleet, record.flagshipName)
+  const flagshipClause = flagshipTypeDisplay
+    ? `${flagshipTypeDisplay}「${flagshipDisplay}」ヲ旗艦トシ`
+    : record.flagshipName
+      ? `「${flagshipDisplay}」ヲ旗艦トシ`
+      : `旗艦「${flagshipDisplay}」ノ指揮ノ下`
+  const base = `当時我部隊兵力ハ、${record.friendlySummary}ヲ基幹トスル兵力ニシテ、${flagshipClause}、沈着機敏ニ行動セリ。`
 
   if (record.highlightFlags.antiAirScreen) {
     return `${base}殊ニ秋月型駆逐艦ヲ中核トスル防空火網ハ緊密ニシテ、敵航空攻撃企図ヲ挫折セシムルニ大イニ寄与セリ。`
@@ -115,8 +122,11 @@ export const routeWarRecord = (record: NormalizedWarReportRecord): ReportRenderC
   openingEnemyClause: buildOpeningEnemyClause(record),
   resultPhrase: getResultPhrase(record),
   friendlySummary: record.friendlySummary,
+  friendlyFleet: record.friendlyFleet,
   flagshipDisplay: record.flagshipName,
+  flagshipTypeDisplay: getFlagshipTypeLabel(record.friendlyFleet, record.flagshipName),
   mvpDisplay: record.mvpName,
+  mvpDisplays: record.mvpNames ?? (record.mvpName ? [record.mvpName] : []),
   damageSeverity: record.damageSummary.severity,
   damageLabel: record.damageSummary.label,
   damageDetail: record.damageSummary.detail,

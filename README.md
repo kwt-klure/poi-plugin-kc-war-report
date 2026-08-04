@@ -35,7 +35,7 @@ The core rule is simple:
 
 - keep game data internally when it helps logic
 - write user-facing text as wartime-style document prose
-- say `未詳` / `細目未詳` when detail is not available
+- let the reporting voice say `未詳` / `細目未詳` when its field picture is incomplete
 - let `標準公報` and `短報` exaggerate when a real event basis exists
 - do not make `硬派詳報` lie just because the public voices are allowed to
 
@@ -43,7 +43,7 @@ The core rule is simple:
 
 - logic に必要な game data は内部で保持する
 - user-facing text は戦時文書らしい字面を優先する
-- detail が足りない所は `未詳` / `細目未詳` と書く
+- 現場側の把握が不完全な所は `未詳` / `細目未詳` と書く
 - event basis がある場合、`標準公報` と `短報` は大きく吹いてよい
 - public voice が吹くからといって、`硬派詳報` まで嘘をつかせない
 
@@ -54,7 +54,7 @@ different bureaucratic masks for the same sortie.
 
 | Voice | Reader | Truth Policy | Flavor |
 | --- | --- | --- | --- |
-| `硬派詳報` | command / internal staff | truth-first | dry, chaptered, conservative |
+| `硬派詳報` | command / internal staff | truth-bounded | dry, chaptered, field-observed |
 | `標準公報` | public announcement | propaganda | official, orderly, inflated |
 | `短報` | clipped dispatch / notice | propaganda | terse, overconfident, shameless |
 
@@ -63,7 +63,7 @@ different bureaucratic masks for the same sortie.
 
 | Voice | 読者 | Truth policy | 調子 |
 | --- | --- | --- | --- |
-| `硬派詳報` | 上級司令部 / 内部幕僚 | truth-first | 乾いた章立て、保守的 |
+| `硬派詳報` | 上級司令部 / 内部幕僚 | truth-bounded | 乾いた章立て、現場観測的 |
 | `標準公報` | 対外発表 | propaganda | 官様、整然、浮報可 |
 | `短報` | 掲示・回覧・引用される速報 | propaganda | 短く、強く、面の皮が厚い |
 
@@ -81,7 +81,8 @@ The live line can currently use:
 
 - sortie session from departure to return
 - practice result
-- fleet composition, flagship, and MVP
+- fleet composition, flagship, and one or two official MVPs
+- combined-fleet main and escort rosters
 - broad result category and damage state
 - broad enemy classification and node trail
 - safe battle-context signals
@@ -97,7 +98,8 @@ live capture からは以下を生成できます。
 
 - 出撃から帰投までの sortie session
 - 演習結果
-- 編成、旗艦、MVP
+- 編成、旗艦、一艦または二艦の公式 MVP
+- 聯合艦隊の第一・第二艦隊 roster
 - おおまかな戦果分類と損害状態
 - 大分類としての敵情と node trail
 - 安全に使える battle-context signal
@@ -109,6 +111,7 @@ The plugin also preserves a few kinds of useful but easy-to-miss work:
 
 - defensive anti-air events from visible `api_air_fire`
 - enemy plane loss from visible air phases
+- positive anti-submarine hits from aligned shelling-phase attacker, target, and damage arrays
 - enemy carrier aircraft-loss estimates when carrier damage and master slot data
   are available
 - enemy flagship sinking when aligned enemy HP arrays show the first enemy ship at
@@ -121,11 +124,36 @@ turning the plugin into a full battle parser.
 
 - visible `api_air_fire` からの防空戦闘 event
 - visible air phase からの敵機損失
+- aligned shelling phase から確認できる対潜攻撃の有効命中
 - 敵空母被害と master slot data が揃う場合の艦載機喪失 estimate
 - 敵 HP 配列が揃い、敵一番艦 HP がゼロになった場合の敵旗艦撃沈
 
 これらは文書向けの truth event です。完全な battle parser になるためではなく、
 文書側が「見えにくい戦功」を忘れないために使います。
+
+### Combined Fleets
+
+For a 6+6 combined sortie, the plugin captures both the main and escort fleets.
+Daytime and AACI actor indices can therefore resolve to an escort ship instead
+of falling back to anonymous unit credit. Night attribution is named only when
+the packet identifies the active friendly deck; ambiguous ownership remains
+anonymous.
+
+`硬派詳報` lists `第一艦隊` and `第二艦隊` separately. AA and ASW specialists in
+either fleet enter the same merit board, while two official game MVPs receive a
+joint commendation only when no stronger named specialist qualifies. Multiple
+named ASW contributors may support a cooperative unit claim, but the plugin does
+not invent individual submarine kills.
+
+6+6 の聯合艦隊 sortie では、第一艦隊と第二艦隊の両方を capture
+します。昼戦と AACI の actor index は第二艦隊の艦まで解決できます。
+夜戦は active deck が明確な場合だけ艦名付きとし、不明な場合は部隊戦果の
+ままにします。
+
+`硬派詳報` は `第一艦隊` と `第二艦隊` を分けて記載します。どちらの艦隊の
+防空・対潜 specialist も同じ merit board で評価し、より強い具名戦果が
+ない場合のみ二艦の公式 MVP を並記します。複数艦の対潜貢献は協同戦果と
+して扱えますが、各艦の潜水艦撃沈功は捏造しません。
 
 ### Sandbox Documents
 
@@ -158,28 +186,41 @@ sandbox は live battle history に書き込まず、実 sortie も必要とし�
 
 ### `硬派詳報`
 
-`硬派詳報` is truth-first.
+`硬派詳報` is truth-first, but it is not omniscient. One deterministic
+observation profile is chosen for the whole report: `surveyed`, `field_summary`,
+or `fragmentary`. The underlying capture remains exact; the document may render
+that truth as exact, bounded, or still being collated.
 
 It may record:
 
 - defensive anti-air credit
-- exact enemy plane loss when the visible source exists
+- anti-submarine contribution rendered according to the report-wide observation profile
+- exact or truth-bounded enemy plane loss when the visible source exists
 - conservative carrier-air-loss estimates
 - confirmed enemy flagship sinking
-- distinguished-ship findings based on a strong named anti-air contribution
+- distinguished-ship findings based on named anti-air and anti-submarine contribution
+- exact, approximate, or intentionally incomplete own-damage summaries
+- four, two, or zero individually listed enemy ships according to the report's
+  observation profile
 
 It should avoid raw game-mechanic wording such as `対空CI`, `カットイン`, `slot`,
 `trigger`, and `proc`.
 
-`硬派詳報` は truth-first です。
+`硬派詳報` は truth-first ですが、全知ではありません。report 全体で一つの
+deterministic observation profile、`surveyed`、`field_summary`、または
+`fragmentary` を選びます。capture 内部の truth は exact のまま保持し、文書上では
+exact、bounded、または整理中として書き分けます。
 
 記録できるものは以下です。
 
 - 防空戦果
-- source が見える場合の敵機損失
+- report-wide observation profile に応じた対潜戦果
+- source が見える場合の exact または truth-bounded な敵機損失
 - 保守的な敵艦載機喪失 estimate
 - 確認済みの敵旗艦撃沈
-- 艦名付きの強い防空戦果に基づく殊勲艦認定
+- 艦名付きの防空・対潜戦果を総合した殊勲艦認定
+- exact、概数、または intentionally incomplete な我方損害 summary
+- observation profile に応じた敵個艦細目四隻、二隻、または未詳
 
 ただし `対空CI`、`カットイン`、`slot`、`trigger`、`proc` のような game-mechanic
 語は user-facing text に出しません。
@@ -201,8 +242,8 @@ defense, carrier-air loss, or enemy flagship sinking.
 べきではありません。
 
 `標準公報` chooses public claims in this order: enemy flagship sinking, enemy
-carrier aircraft loss, numeric anti-air success, transport, submarine, air,
-main force, then generic copy. Two or more concrete claims become a numbered
+carrier aircraft loss, numeric anti-air success, observed anti-submarine success,
+transport, submarine, air, main force, then generic copy. Two or more concrete claims become a numbered
 `現在迄ニ判明セル戦果` inventory; one remains a single sentence.
 
 Public aircraft counts are deterministic rhetoric, not measurements. One saved
@@ -210,8 +251,8 @@ report may say `百四十余機`, `約百四十機`, `百二十乃至百六十�
 `百四十機（内不確実三十機）`; the chosen wording is reused wherever that claim
 appears in the same report.
 
-`標準公報` は、敵旗艦撃沈、敵母艦艦載機喪失、数値付き防空戦果、輸送、潜水、航空、
-主力、generic の順に材料を選びます。具体的戦果が二件以上なら
+`標準公報` は、敵旗艦撃沈、敵母艦艦載機喪失、数値付き防空戦果、確認できた対潜戦果、
+輸送、潜水、航空、主力、generic の順に材料を選びます。具体的戦果が二件以上なら
 `現在迄ニ判明セル戦果` の numbered inventory にし、一件だけなら従来どおり単独句に
 します。
 
@@ -232,22 +273,26 @@ KC War Report intentionally does not:
 
 - store full raw API packets in history
 - become a full battle viewer
-- infer shell, torpedo, or shot-by-shot detail
+- render a full shelling, torpedo, or shot-by-shot battle ledger
 - invent exact counts in the truth-first `硬派詳報`
 - treat heavy damage as sinking
 - infer enemy flagship sinking from S-rank alone
 - assign enemy flagship sinking to a friendly ship without attacker attribution
+- assign a submarine sinking to a friendly ship from positive ASW damage alone
+- apply public propaganda multipliers to `硬派詳報`
 - merge `硬派詳報` truth policy with propaganda logic
 
 KC War Report は意図的に以下をしません。
 
 - full raw API packet を history に保存しない
 - 完全な battle viewer にならない
-- 砲撃、雷撃、一手ごとの detail を推論しない
+- 砲撃、雷撃、一手ごとの完全な battle ledger を生成しない
 - truth-first の `硬派詳報` で確認不能な exact count を捏造しない
 - 大破を撃沈扱いしない
+- 対潜有効打だけで特定艦の撃沈功を断定しない
 - S 勝だけから敵旗艦撃沈を推論しない
 - attacker attribution なしに敵旗艦撃沈を特定の友軍艦へ割り当てない
+- public propaganda multiplier を `硬派詳報` に適用しない
 - `硬派詳報` の truth policy と propaganda logic を混ぜない
 
 ## Example Output
@@ -314,7 +359,7 @@ phrasing family を選びます。
 一、任務概要。
 　令和八年三月十四日、ブルネイ泊地沖方面ニ於テ対潜警戒行動ニ従事。
 二、参加兵力。
-　駆逐艦二隻、軽巡洋艦一隻。旗艦「ジョンストン」。
+　駆逐艦二隻、軽巡洋艦一隻。旗艦、駆逐艦「ジョンストン」。
 三、敵情。
 　敵情総括　敵潜水兵力。
 　交戦点数　二。
@@ -341,6 +386,14 @@ phrasing family を選びます。
 ## Special Claim Examples
 
 ### Defensive Anti-Air Credit
+
+Depending on the report-wide observation profile, the same captured loss may
+appear as `五十三機`, `約六十機`, `五十乃至六十機`, or `五十余機`. These are
+truth-bounded field-report forms, not the public voices' inflated totals.
+
+report 全体の observation profile により、同じ capture は `五十三機`、`約六十機`、
+`五十乃至六十機`、または `五十余機` と表記されます。これは truth-bounded な現場報告
+口径であり、public voice の浮報値ではありません。
 
 ```text
 　防空戦果　「初月」防空射撃ニ当リ、敵機計五十三機ヲ撃墜。
@@ -442,7 +495,7 @@ git clone https://github.com/kwt-klure/poi-plugin-kc-war-report.git
 cd poi-plugin-kc-war-report
 npm install
 npm pack --pack-destination dist
-npm install "./dist/poi-plugin-kc-war-report-0.4.15.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
+npm install "./dist/poi-plugin-kc-war-report-0.4.18.tgz" --prefix "$HOME/Library/Application Support/poi/plugins"
 ```
 
 ### Update

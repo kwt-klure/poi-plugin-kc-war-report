@@ -1,6 +1,8 @@
 import {
   buildDamageAssessment,
   buildFleetCompositionText,
+  getFlagshipTypeLabel,
+  normalizeFlagshipTypeLabel,
   normalizeFriendlyReportName,
   normalizePracticeCapture,
   normalizeSortieSession,
@@ -225,6 +227,137 @@ const antiAirSortieSession: SortieSessionCapture = {
   battles: [antiAirBattle],
 }
 
+const antiSubmarineBattle: BattleNodeCapture = {
+  ...nodeBattle,
+  sawAirAttack: false,
+  antiAirScreen: false,
+  antiSubmarineSummary: {
+    triggered: true,
+    contributions: [
+      {
+        shipNameRaw: 'Johnston改',
+        damagingHitCount: 2,
+        targetCount: 2,
+        assessedDamage: 58,
+      },
+    ],
+  },
+  mvpNameRaw: 'Atlanta',
+}
+
+const antiSubmarineSortieSession: SortieSessionCapture = {
+  ...sortieSession,
+  id: 'sortie-asw-1',
+  battles: [antiSubmarineBattle],
+}
+
+const combinedFleetShips: FleetShipSnapshot[] = [
+  ['長門改二', 8, '戦艦'],
+  ['陸奥改二', 8, '戦艦'],
+  ['鳥海改二', 5, '重巡洋艦'],
+  ['千歳航改二', 7, '軽空母'],
+  ['千代田航改二', 7, '軽空母'],
+  ['龍田改二', 3, '軽巡洋艦'],
+  ['天津風改二', 2, '駆逐艦'],
+  ['阿武隈改二', 3, '軽巡洋艦'],
+  ['朝霜改', 2, '駆逐艦'],
+  ['冬月改', 2, '駆逐艦'],
+  ['霞改二', 2, '駆逐艦'],
+  ['大井改二', 4, '重雷装巡洋艦'],
+].map(([nameJa, typeId, typeNameJa], index) => ({
+  instanceId: 500 + index,
+  shipId: 1500 + index,
+  nameJa: String(nameJa),
+  typeId: Number(typeId),
+  typeNameJa: String(typeNameJa),
+  level: 99,
+  startHp: 40,
+  endHp: 40,
+  maxHp: 40,
+  fleetRole: index < 6 ? 'main' : 'escort',
+  fleetPosition: index % 6,
+}))
+
+const combinedFleetBattle: BattleNodeCapture = {
+  ...antiAirBattle,
+  occurredAt: Date.UTC(2026, 7, 4, 15, 17, 0),
+  nodeLabel: 'Node 43',
+  operationLabelRaw: '南沙諸島沖/オルモック沖/サンベルナルジノ海峡沖',
+  operationPhraseRaw: '南沙諸島沖/オルモック沖/サンベルナルジノ海峡沖',
+  friendlyFleet: combinedFleetShips,
+  enemyDeckNameRaw: '深海任務部隊 空母機動部隊',
+  enemyShipNamesRaw: ['試作空母姫', '軽母ヌ級改'],
+  damageSummary: buildDamageAssessment(combinedFleetShips),
+  antiAirSummary: {
+    triggered: true,
+    shipNameRaw: '冬月改',
+    ciKind: 1,
+    enemyPlaneLoss: 120,
+  },
+  antiSubmarineSummary: {
+    triggered: true,
+    contributions: [
+      {
+        shipNameRaw: '阿武隈改二',
+        damagingHitCount: 1,
+        targetCount: 1,
+        assessedDamage: 44,
+      },
+      {
+        shipNameRaw: '朝霜改',
+        damagingHitCount: 1,
+        targetCount: 1,
+        assessedDamage: 37,
+      },
+    ],
+  },
+  carrierAirLossSummary: null,
+  flagshipNameRaw: '長門改二',
+  mvpNameRaw: '長門改二',
+  mvpNameRaws: ['長門改二', '大井改二'],
+}
+
+const combinedFleetSortieSession: SortieSessionCapture = {
+  ...antiAirSortieSession,
+  id: 'sortie-combined-fleet-attribution',
+  startedAt: Date.UTC(2026, 7, 4, 15, 5, 0),
+  updatedAt: Date.UTC(2026, 7, 4, 15, 17, 0),
+  mapLabel: '62-2',
+  operationLabelRaw: '南沙諸島沖/オルモック沖/サンベルナルジノ海峡沖',
+  operationPhraseRaw: '南沙諸島沖/オルモック沖/サンベルナルジノ海峡沖',
+  friendlyFleetInitial: combinedFleetShips,
+  friendlyFleetLatest: combinedFleetShips,
+  nodeTrail: ['Node 45', 'Node 24', 'Node 43'],
+  battles: [combinedFleetBattle],
+  combinedFleetType: 2,
+}
+
+type FormalObservationProfileIdForTest = 'surveyed' | 'field_summary' | 'fragmentary'
+
+const renderFormalSortie = (session: SortieSessionCapture, variantSeed: number) =>
+  buildWarReportFromRecord(normalizeSortieSession(session, 'completed'), 'formal_after_action', {
+    truthSource: {
+      kind: 'sortie',
+      sortie: session,
+    },
+    addressSnapshot: formalAddressSnapshot,
+    variantSeed,
+  })
+
+const findFormalReportByProfile = (
+  session: SortieSessionCapture,
+  profile: FormalObservationProfileIdForTest,
+) => {
+  for (let variantSeed = 0; variantSeed < 256; variantSeed += 1) {
+    const report = renderFormalSortie(session, variantSeed)
+    if (report.selectionSnapshot?.slotFamilies.observationProfile === profile) {
+      return report
+    }
+  }
+
+  throw new Error(`No formal report found for observation profile: ${profile}`)
+}
+
 describe('war report sortie architecture', () => {
   it('normalizes foreign friendly ship names into katakana aliases', () => {
     expect(normalizeFriendlyReportName('Johnston改')).toBe('ジョンストン')
@@ -232,6 +365,14 @@ describe('war report sortie architecture', () => {
     expect(normalizeFriendlyReportName('Ташкент改')).toBe('タシュケント')
     expect(normalizeFriendlyReportName('由良改二')).toBe('由良')
     expect(normalizeFriendlyReportName('最上改二特')).toBe('最上')
+  })
+
+  it('uses broad battleship labels for named flagships', () => {
+    expect(normalizeFlagshipTypeLabel('戦艦')).toBe('戦艦')
+    expect(normalizeFlagshipTypeLabel('高速戦艦')).toBe('戦艦')
+    expect(normalizeFlagshipTypeLabel('航空戦艦')).toBe('戦艦')
+    expect(normalizeFlagshipTypeLabel('駆逐艦')).toBe('駆逐艦')
+    expect(getFlagshipTypeLabel(ships, '扶桑')).toBeNull()
   })
 
   it('normalizes a sortie session into a fixed aggregate enemy category', () => {
@@ -321,7 +462,7 @@ describe('war report sortie architecture', () => {
       },
     )
 
-    expect(report.body).toContain('旗艦「ジョンストン」')
+    expect(report.body).toContain('旗艦、駆逐艦「ジョンストン」')
     expect(report.body).toContain('「アトランタ」殊勲艦')
     expect(report.body).not.toContain('Johnston')
     expect(report.body).not.toContain('Atlanta')
@@ -354,7 +495,7 @@ describe('war report sortie architecture', () => {
     expect(formal.body).toContain('戦果総括')
     expect(formal.body).not.toContain('戦果判定')
     expect(formal.body).not.toContain('総合戦果判定')
-    expect(formal.body).toContain('砲雷戦細目未詳')
+    expect(formal.body).toContain('　交戦概要　')
     expect(formal.body).toContain('以上')
     expect(short.bulletin).toContain('大本営海軍部発表')
     expect(short.bulletin).not.toContain('海軍省提供')
@@ -475,7 +616,9 @@ describe('war report sortie architecture', () => {
     })
 
     expect(formal.body).toContain('防空戦果')
-    expect(formal.body).toContain('「初月」防空射撃ニ当リ、敵機計五十三機ヲ撃墜。')
+    expect(formal.body).toMatch(
+      /「初月」防空射撃ニ当リ、敵機計(?:五十三機|約六十機|五十乃至六十機|五十余機)ヲ撃墜。/,
+    )
     expect(standard.body).toMatch(
       /「初月」ノ防空戦闘鋭甚ニシテ、敵機(?:百四十余機|約百四十機|百二十乃至百六十機|百四十機（内不確実三十機）)ヲ撃滅セリ。/,
     )
@@ -485,7 +628,7 @@ describe('war report sortie architecture', () => {
     expect(short.body).not.toContain('「初月」奮戦、敵機百九十余機ヲ掃蕩。')
 
     expect(formal.body).toMatch(
-      /敵空母損失ニ伴ヒ、搭載敵機計百十八機喪失ト認ム。|敵空母被害ニ伴ヒ、敵航空兵力亦大損耗ヲ生ジ、搭載敵機計百十八機喪失ト認ム。/,
+      /敵空母(?:損失ニ伴ヒ、搭載敵機計|被害ニ伴ヒ、敵航空兵力亦大損耗ヲ生ジ、搭載敵機計)(?:百十八機|約百二十機|百十乃至百二十機|百十余機)喪失ト認ム。/,
     )
     expect(standard.body).toMatch(/敵艦載機|敵母艦群損失|敵航空戦力亦同時ニ/)
 
@@ -621,6 +764,166 @@ describe('war report sortie architecture', () => {
     expect(standard.body).not.toContain('矢矧')
   })
 
+  it('mentions observed anti-submarine contribution and lets strong ASW outrank MVP', () => {
+    const record = normalizeSortieSession(antiSubmarineSortieSession, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: antiSubmarineSortieSession,
+    }
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource,
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+    const short = buildWarReportFromRecord(record, 'short_bulletin', { truthSource })
+
+    expect(formal.body).toMatch(
+      /対潜戦果　「ジョンストン」対潜攻撃(?:二回、敵潜水艦二隻|数回、敵潜水艦)ニ有効打撃。|対潜戦果　対潜攻撃実施、戦果細目後報。/,
+    )
+    expect(formal.body).toContain(
+      '戦闘後判定ニ於テ「ジョンストン」対潜戦果顕著、殊勲艦ト認定。',
+    )
+    expect(formal.body).not.toContain('「アトランタ」殊勲艦')
+    expect(standard.bulletin).toMatch(/対潜戦|敵潜航企図|対潜戦果/)
+    expect(standard.body).toContain(
+      '殊ニ「ジョンストン」ノ対潜戦闘鋭甚ニシテ、敵潜水艦数隻ヲ撃沈破セリ。',
+    )
+    expect(standard.body).toMatch(
+      /「ジョンストン」ノ対潜戦闘、武功顕著ナリ。|「ジョンストン」ノ対潜奮戦、殊勲ト認ム。|「ジョンストン」ノ対潜戦果、特筆ニ値ス。/,
+    )
+    expect(short.body).toContain('「ジョンストン」対潜奮戦、敵潜水艦数隻ヲ掃蕩。')
+
+    for (const text of [formal.body, standard.body, short.body]) {
+      expect(text).not.toMatch(/ASW|api_|opening_taisen|hougeki/)
+    }
+  })
+
+  it('uses one formal observation profile for anti-submarine detail', () => {
+    const surveyed = findFormalReportByProfile(antiSubmarineSortieSession, 'surveyed')
+    const fieldSummary = findFormalReportByProfile(antiSubmarineSortieSession, 'field_summary')
+    const fragmentary = findFormalReportByProfile(antiSubmarineSortieSession, 'fragmentary')
+
+    expect(surveyed.body).toContain(
+      '対潜戦果　「ジョンストン」対潜攻撃二回、敵潜水艦二隻ニ有効打撃。',
+    )
+    expect(fieldSummary.body).toContain(
+      '対潜戦果　「ジョンストン」対潜攻撃数回、敵潜水艦ニ有効打撃。',
+    )
+    expect(fragmentary.body).toContain('対潜戦果　対潜攻撃実施、戦果細目後報。')
+    expect(`${surveyed.body}\n${fieldSummary.body}\n${fragmentary.body}`).not.toMatch(
+      /敵潜水艦.*撃沈(?:ヲ確認|確実ト認ム)/,
+    )
+  })
+
+  it('rewards combined AA and ASW evidence before a single-domain game MVP', () => {
+    const combinedBattle: BattleNodeCapture = {
+      ...antiAirBattle,
+      enemyDeckNameRaw: '敵潜水艦隊 航空支援隊',
+      enemyShipNamesRaw: ['潜水ソ級', '軽母ヌ級'],
+      antiSubmarineSummary: {
+        triggered: true,
+        contributions: [
+          {
+            shipNameRaw: '初月改二',
+            damagingHitCount: 1,
+            targetCount: 1,
+            assessedDamage: 24,
+          },
+          {
+            shipNameRaw: '矢矧改二乙',
+            damagingHitCount: 2,
+            targetCount: 2,
+            assessedDamage: 58,
+          },
+        ],
+      },
+      mvpNameRaw: '矢矧改二乙',
+    }
+    const combinedSortie: SortieSessionCapture = {
+      ...antiAirSortieSession,
+      id: 'sortie-combined-aa-asw-merit',
+      battles: [combinedBattle],
+    }
+    const record = normalizeSortieSession(combinedSortie, 'completed')
+    const truthSource = { kind: 'sortie' as const, sortie: combinedSortie }
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource,
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+
+    expect(formal.body).toContain(
+      '戦闘後判定ニ於テ「初月」防空並対潜戦果顕著、殊勲艦ト認定。',
+    )
+    expect(formal.body).not.toContain('「矢矧」殊勲艦')
+    expect(standard.body).toMatch(
+      /「初月」ノ防空並対潜戦闘、武功顕著ナリ。|「初月」ノ防空対潜両面ニ於ケル奮戦、殊勲ト認ム。|「初月」ノ防空並対潜戦果、特筆ニ値ス。/,
+    )
+  })
+
+  it('attributes combined-fleet specialist evidence across 6+6 ships', () => {
+    const record = normalizeSortieSession(combinedFleetSortieSession, 'completed')
+    const truthSource = {
+      kind: 'sortie' as const,
+      sortie: combinedFleetSortieSession,
+    }
+    const formal = findFormalReportByProfile(combinedFleetSortieSession, 'surveyed')
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+
+    expect(record.friendlyFleet).toHaveLength(12)
+    expect(record.mvpNames).toEqual(['長門', '大井'])
+    expect(formal.body).toContain(
+      '第一艦隊　戦艦二隻、重巡洋艦一隻、軽空母二隻、軽巡洋艦一隻。',
+    )
+    expect(formal.body).toContain(
+      '第二艦隊　駆逐艦四隻、軽巡洋艦一隻、重雷装巡洋艦一隻。',
+    )
+    expect(formal.body).toContain(
+      '対潜戦果　「阿武隈」対潜攻撃一回、敵潜水艦一隻ニ有効打撃。',
+    )
+    expect(formal.body).toContain(
+      '対潜戦果　「朝霜」対潜攻撃一回、敵潜水艦一隻ニ有効打撃。',
+    )
+    expect(formal.body).toContain(
+      '戦闘後判定ニ於テ「冬月」防空戦果顕著、殊勲艦ト認定。',
+    )
+    expect(standard.body).toContain('現在迄ニ判明セル戦果概ネ左ノ如シ。')
+    expect(standard.body).toMatch(
+      /「阿武隈」及「朝霜」(?:協同ノ対潜戦闘鋭甚ニシテ|対潜戦闘ニ協同シ)、敵潜水艦数隻ヲ撃沈破セリ。/,
+    )
+    expect(standard.body).toMatch(
+      /「冬月」ノ防空戦闘、武功顕著ナリ。|「冬月」ノ防空奮戦、殊勲ト認ム。|「冬月」ノ対空戦闘、特筆ニ値ス。/,
+    )
+    expect(standard.body).not.toMatch(/「長門」ノ戦働、殊勲|「大井」ノ戦働、殊勲/)
+  })
+
+  it('uses a joint commendation when a combined fleet has two MVPs and no specialist', () => {
+    const mvpOnlyBattle: BattleNodeCapture = {
+      ...combinedFleetBattle,
+      antiAirSummary: null,
+      antiSubmarineSummary: null,
+    }
+    const mvpOnlySortie: SortieSessionCapture = {
+      ...combinedFleetSortieSession,
+      id: 'sortie-combined-fleet-dual-mvp',
+      battles: [mvpOnlyBattle],
+    }
+    const record = normalizeSortieSession(mvpOnlySortie, 'completed')
+    const truthSource = { kind: 'sortie' as const, sortie: mvpOnlySortie }
+    const formal = buildWarReportFromRecord(record, 'formal_after_action', {
+      truthSource,
+      addressSnapshot: formalAddressSnapshot,
+    })
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+
+    expect(formal.body).toContain(
+      '戦闘後判定ニ於テ「長門」及「大井」両艦ヲ殊勲艦ト認定。',
+    )
+    expect(standard.body).toMatch(
+      /「長門」及「大井」両艦ノ奮戦、武功顕著ナリ。|「長門」及「大井」ノ戦働、殊勲ト認ム。|本行動ニ於ケル「長門」及「大井」ノ奮迅、特筆ニ値ス。/,
+    )
+  })
+
   it('mentions enemy flagship sinking in all document voices without assigning it to a ship', () => {
     const flagshipSunkBattle = {
       ...antiAirBattle,
@@ -653,7 +956,9 @@ describe('war report sortie architecture', () => {
     })
     const allText = `${formal.body}\n${standard.body}\n${short.body}`
 
-    expect(formal.body).toContain('敵旗艦「戦艦レ級」撃沈ヲ確認。')
+    expect(formal.body).toMatch(
+      /敵旗艦「戦艦レ級」(?:撃沈ヲ確認|撃沈確実ト認ム|沈没セルモノト認ム)。/,
+    )
     expect(standard.bulletin).toContain('敵旗艦「戦艦レ級」')
     expect(standard.body).toContain('現在迄ニ判明セル戦果概ネ左ノ如シ。')
     expect(standard.body).toContain('一、敵旗艦「戦艦レ級」ヲ撃沈、敵戦列ヲ潰乱セシメタリ。')
@@ -663,6 +968,14 @@ describe('war report sortie architecture', () => {
     expect(short.body).toContain('敵旗艦撃沈、戦果顕著。')
     expect(allText).not.toContain('「初月」敵旗艦')
     expect(allText).not.toContain('「矢矧」敵旗艦')
+
+    for (const profile of ['surveyed', 'field_summary', 'fragmentary'] as const) {
+      const profiledFormal = findFormalReportByProfile(flagshipSunkSortie, profile)
+      expect(profiledFormal.body).toMatch(
+        /敵旗艦「戦艦レ級」(?:撃沈ヲ確認|撃沈確実ト認ム|沈没セルモノト認ム)。/,
+      )
+      expect(profiledFormal.body).not.toMatch(/「(?:初月|矢矧)」.*敵旗艦/)
+    }
   })
 
   it('escalates high-glory short bulletins into result-first numeric dispatches', () => {
@@ -846,7 +1159,7 @@ describe('war report sortie architecture', () => {
     expect(short.body).not.toContain('敵機百')
   })
 
-  it('keeps formal carrier counts exact while public voices use their own rhetoric bands', () => {
+  it('keeps formal carrier counts truth-bounded while public voices use their own rhetoric bands', () => {
     const record = normalizeSortieSession(antiAirSortieSession, 'completed')
     const truthSource = {
       kind: 'sortie' as const,
@@ -860,12 +1173,125 @@ describe('war report sortie architecture', () => {
     })
     const short = buildWarReportFromRecord(record, 'short_bulletin', { truthSource })
 
-    expect(formal.body).toContain('百十八機喪失ト認ム。')
+    expect(formal.body).toMatch(/(?:百十八機|約百二十機|百十乃至百二十機|百十余機)喪失ト認ム。/)
     expect(standard.body).toMatch(
       /二百余機|約二百機|百五十乃至二百五十機|二百機（内不確実四十機）/,
     )
     expect(short.body).toContain('三百余機')
     expect(short.body).not.toContain('二百余機')
+  })
+
+  it('selects one deterministic formal observation profile without changing public styles', () => {
+    const observedProfiles = new Set<string>()
+
+    for (let variantSeed = 0; variantSeed < 128; variantSeed += 1) {
+      const first = renderFormalSortie(antiAirSortieSession, variantSeed)
+      const repeated = renderFormalSortie(antiAirSortieSession, variantSeed)
+
+      expect(repeated).toEqual(first)
+      observedProfiles.add(first.selectionSnapshot?.slotFamilies.observationProfile ?? '')
+    }
+
+    expect(observedProfiles).toEqual(new Set(['surveyed', 'field_summary', 'fragmentary']))
+
+    const record = normalizeSortieSession(antiAirSortieSession, 'completed')
+    const truthSource = { kind: 'sortie' as const, sortie: antiAirSortieSession }
+    const standard = buildWarReportFromRecord(record, 'standard_bulletin', { truthSource })
+    const short = buildWarReportFromRecord(record, 'short_bulletin', { truthSource })
+
+    expect(standard.selectionSnapshot?.slotFamilies.observationProfile).toBeUndefined()
+    expect(short.selectionSnapshot?.slotFamilies.observationProfile).toBeUndefined()
+  })
+
+  it('renders exact, bounded, and coarse formal aircraft counts from the same truth', () => {
+    const surveyed = findFormalReportByProfile(antiAirSortieSession, 'surveyed')
+    const fieldSummary = findFormalReportByProfile(antiAirSortieSession, 'field_summary')
+    const fragmentary = findFormalReportByProfile(antiAirSortieSession, 'fragmentary')
+
+    expect(surveyed.body).toContain('敵機計五十三機ヲ撃墜。')
+    expect(surveyed.body).toContain('搭載敵機計百十八機喪失ト認ム。')
+    expect(fieldSummary.body).toMatch(/敵機計(?:約六十機|五十乃至六十機)ヲ撃墜。/)
+    expect(fieldSummary.body).toMatch(
+      /搭載敵機計(?:約百二十機|百十乃至百二十機)喪失ト認ム。/,
+    )
+    expect(fragmentary.body).toContain('敵機計五十余機ヲ撃墜。')
+    expect(fragmentary.body).toContain('搭載敵機計百十余機喪失ト認ム。')
+    expect(`${surveyed.body}\n${fieldSummary.body}\n${fragmentary.body}`).not.toContain(
+      '敵機計百四十',
+    )
+  })
+
+  it('applies one coherent war-fog profile to damage counts and enemy detail', () => {
+    const damagedFleet: FleetShipSnapshot[] = [
+      { ...ships[0], instanceId: 101, shipId: 1001, nameJa: '雪風改二', startHp: 40, endHp: 8, maxHp: 40 },
+      { ...ships[1], instanceId: 102, shipId: 1002, nameJa: '時雨改三', startHp: 40, endHp: 10, maxHp: 40 },
+      { ...ships[2], instanceId: 103, shipId: 1003, nameJa: '矢矧改二乙', startHp: 40, endHp: 20, maxHp: 40 },
+      { ...ships[0], instanceId: 104, shipId: 1004, nameJa: '秋月改', startHp: 40, endHp: 31, maxHp: 40 },
+      { ...ships[0], instanceId: 105, shipId: 1005, nameJa: '照月改', startHp: 40, endHp: 32, maxHp: 40 },
+      { ...ships[0], instanceId: 106, shipId: 1006, nameJa: '涼月改', startHp: 40, endHp: 33, maxHp: 40 },
+      { ...ships[0], instanceId: 107, shipId: 1007, nameJa: '冬月改', startHp: 40, endHp: 34, maxHp: 40 },
+    ]
+    const observationBattle: BattleNodeCapture = {
+      ...nodeBattle,
+      nodeLabel: 'Node 7',
+      friendlyFleet: damagedFleet,
+      enemyDeckNameRaw: '敵水上打撃部隊',
+      enemyShipNamesRaw: ['戦艦ル級', '重巡リ級', '軽巡ホ級', '駆逐ロ級', '駆逐イ級'],
+      damageSummary: buildDamageAssessment(damagedFleet),
+      sawAirAttack: false,
+      flagshipNameRaw: '雪風改二',
+    }
+    const observationSortie: SortieSessionCapture = {
+      ...sortieSession,
+      id: 'sortie-formal-observation-damage',
+      friendlyFleetInitial: damagedFleet.map((ship) => ({ ...ship, endHp: ship.startHp })),
+      friendlyFleetLatest: damagedFleet,
+      nodeTrail: ['Node 7'],
+      battles: [observationBattle],
+    }
+
+    const surveyed = findFormalReportByProfile(observationSortie, 'surveyed')
+    const fieldSummary = findFormalReportByProfile(observationSortie, 'field_summary')
+    const fragmentary = findFormalReportByProfile(observationSortie, 'fragmentary')
+
+    expect(surveyed.body).toContain('大破艦　二隻')
+    expect(surveyed.body).toContain('中破艦　一隻')
+    expect(surveyed.body).toContain('軽微損傷艦　四隻')
+    expect(surveyed.body).toContain('戦艦ル級、重巡リ級、軽巡ホ級、駆逐ロ級 他')
+
+    expect(fieldSummary.body).toContain('大破艦　二隻')
+    expect(fieldSummary.body).toContain('中破艦　一隻')
+    expect(fieldSummary.body).toContain('軽微損傷艦　多数')
+    expect(fieldSummary.body).toContain('戦艦ル級、重巡リ級 他')
+    expect(fieldSummary.body).not.toContain('確認艦種 戦艦ル級、重巡リ級、軽巡ホ級')
+
+    expect(fragmentary.body).toMatch(/大破艦　(?:若干|数隻)/)
+    expect(fragmentary.body).toContain('中破艦　一隻')
+    expect(fragmentary.body).toContain('軽微損傷艦　多数')
+    expect(fragmentary.body).toContain('個艦細目未詳')
+    expect(fragmentary.body).toContain('損傷細目整理中')
+    expect(fragmentary.body).not.toContain('確認艦種')
+  })
+
+  it('reports unknown formal damage as pending instead of no damage', () => {
+    const unknownFleet = ships.map((ship) => ({ ...ship, endHp: null }))
+    const unknownBattle: BattleNodeCapture = {
+      ...nodeBattle,
+      friendlyFleet: unknownFleet,
+      damageSummary: buildDamageAssessment(unknownFleet),
+    }
+    const unknownSortie: SortieSessionCapture = {
+      ...sortieSession,
+      id: 'sortie-formal-unknown-damage',
+      friendlyFleetLatest: unknownFleet,
+      battles: [unknownBattle],
+    }
+    const report = renderFormalSortie(unknownSortie, 0)
+
+    expect(report.body).toContain('我方損害　細目未詳。判明次第後報ス。')
+    expect(report.body).not.toContain('我方損害ナシ')
+    expect(report.body).not.toContain('被害認メズ')
+    expect(report.body).not.toContain('損傷艦ヲ認メズ')
   })
 
   it('renders successful sortie damage differently across the three styles', () => {
@@ -969,7 +1395,7 @@ describe('war report sortie architecture', () => {
       },
     )
 
-    expect(formal.body).toContain('軽微損傷艦　若干')
+    expect(formal.body).toMatch(/軽微損傷艦　(?:二隻|若干|数隻)/)
     expect(formal.body).not.toContain('　我方被害　被害認メズ。')
     expect(formal.body).not.toContain('　我方被害　我方損害ナシ。')
     expect(formal.body).not.toContain('　我方被害　損傷艦ヲ認メズ。')
@@ -1159,7 +1585,7 @@ describe('war report sortie architecture', () => {
     expect(standard.body).toMatch(/目的.*転進/)
     expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/粉砕|赫々|壊滅的|殲滅的/)
     expect(`${standard.bulletin}\n${standard.body}`).not.toMatch(/損傷|損耗|損害|大破|中破/)
-    expect(formal.body).toContain('大破艦　若干')
+    expect(formal.body).toMatch(/大破艦　(?:二隻|若干|数隻)/)
     expect(formal.body).toContain('七、所見。')
     expect(short.selectionSnapshot?.mainNarrative).toBe('disciplined_withdrawal')
     expect(short.body).toContain('一、')
@@ -1262,5 +1688,57 @@ describe('war report sortie architecture', () => {
 
   it('keeps composition summaries stable after the sortie refactor', () => {
     expect(buildFleetCompositionText(ships)).toBe('駆逐艦二隻、軽巡洋艦一隻')
+  })
+
+  it('keeps game composition detail while broadening a named battleship flagship', () => {
+    const fusouFleet: FleetShipSnapshot[] = [
+      {
+        ...ships[0],
+        nameJa: '扶桑改二',
+        typeId: 10,
+        typeNameJa: '航空戦艦',
+      },
+      ships[1],
+    ]
+    const fusouSession: SortieSessionCapture = {
+      ...sortieSession,
+      friendlyFleetInitial: fusouFleet,
+      friendlyFleetLatest: fusouFleet,
+      battles: [
+        {
+          ...nodeBattle,
+          friendlyFleet: fusouFleet,
+          flagshipNameRaw: '扶桑改二',
+        },
+      ],
+    }
+    const report = buildWarReportFromRecord(
+      normalizeSortieSession(fusouSession, 'completed'),
+      'formal_after_action',
+      {
+        truthSource: { kind: 'sortie', sortie: fusouSession },
+        addressSnapshot: formalAddressSnapshot,
+      },
+    )
+
+    expect(report.body).toContain('航空戦艦一隻、軽巡洋艦一隻。旗艦、戦艦「扶桑」。')
+    expect(report.body).not.toContain('旗艦、航空戦艦「扶桑」')
+    expect(report.body).not.toContain('扶桑型')
+
+    const publicReports = Array.from({ length: 8 }, (_, index) =>
+      buildWarReportFromRecord(
+        normalizeSortieSession(fusouSession, 'completed'),
+        'standard_bulletin',
+        { variantSeed: index + 1 },
+      ),
+    )
+    expect(
+      publicReports.some((candidate) => candidate.body.includes('戦艦「扶桑」ヲ旗艦トシ')),
+    ).toBe(true)
+    expect(
+      publicReports.every(
+        (candidate) => !candidate.body.includes('航空戦艦「扶桑」ヲ旗艦トシ'),
+      ),
+    ).toBe(true)
   })
 })

@@ -115,6 +115,8 @@ export type FleetShipSnapshot = {
   startHp: number
   endHp: number | null
   maxHp: number
+  fleetRole?: 'main' | 'escort'
+  fleetPosition?: number
 }
 
 export type DamageSummary = {
@@ -136,6 +138,19 @@ export type AntiAirSummary = {
   shipNameRaw: string | null
   ciKind: number | null
   enemyPlaneLoss: number | null
+}
+
+export type AntiSubmarineContribution = {
+  shipNameRaw: string | null
+  damagingHitCount: number
+  targetCount: number
+  // Internal merit signal only; public and formal prose must not present this as exact HP loss.
+  assessedDamage: number
+}
+
+export type AntiSubmarineSummary = {
+  triggered: boolean
+  contributions: AntiSubmarineContribution[]
 }
 
 export type CarrierAirLossSummary = {
@@ -165,10 +180,12 @@ export type BattleNodeCapture = {
   sawAirAttack: boolean
   antiAirScreen: boolean
   antiAirSummary?: AntiAirSummary | null
+  antiSubmarineSummary?: AntiSubmarineSummary | null
   carrierAirLossSummary?: CarrierAirLossSummary | null
   enemyFlagshipSunkSummary?: EnemyFlagshipSunkSummary | null
   flagshipNameRaw: string | null
   mvpNameRaw: string | null
+  mvpNameRaws?: string[]
 }
 
 export type BattleCapture = {
@@ -193,6 +210,7 @@ export type BattleCapture = {
 export type SortieSessionCapture = {
   id: string
   deckId?: number
+  combinedFleetType?: number
   startedAt: number
   updatedAt: number
   mapLabel: string | null
@@ -236,6 +254,7 @@ export type NormalizedWarReportRecord = {
   entityRenderPolicy: EntityRenderPolicy
   flagshipName: string | null
   mvpName: string | null
+  mvpNames?: string[]
   practiceOpponent: string | null
   winRank: string | null
   sawAirAttack: boolean
@@ -258,8 +277,11 @@ export type ReportRenderContext = {
   openingEnemyClause: string
   resultPhrase: string
   friendlySummary: string
+  friendlyFleet: FleetShipSnapshot[]
   flagshipDisplay: string | null
+  flagshipTypeDisplay: string | null
   mvpDisplay: string | null
+  mvpDisplays: string[]
   damageSeverity: DamageSeverity
   damageLabel: string
   damageDetail: string

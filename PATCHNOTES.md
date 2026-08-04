@@ -1,5 +1,135 @@
 # Patch Notes
 
+## 0.4.18
+
+This patch teaches the report which half of a combined fleet actually did the
+interesting work. A 6+6 sortie now retains both fleets, resolves bounded
+daytime and active-deck actor indices, and considers both official MVPs without
+letting either one erase stronger named AA or ASW evidence.
+
+この patch は、聯合艦隊のどちら側が面白い戦果を上げたのかを report に
+覚えさせます。6+6 sortie で両艦隊を保持し、bounded な昼戦・active-deck
+actor index を解決し、二艦の公式 MVP も読みます。ただし、艦名付きの強い
+防空・対潜戦果があれば、従来どおりそちらを殊勲とします。
+
+### Changed
+
+- `combined-fleet truth capture`
+  - captures deck 1 as the main fleet and deck 2 as the escort fleet
+  - recovers combined topology from visible packet fields when the earlier fleet flag was missed
+  - maps daytime and AACI indices across the 6+6 roster
+  - maps night actors only when `api_active_deck` makes ownership unambiguous
+  - preserves anonymous unit evidence when snapshots or ownership are incomplete
+- `AA / ASW merit`
+  - credits named escort-fleet AACI and ASW actors when the packet supports it
+  - retains separate ASW contributions while allowing a cooperative public unit claim
+  - keeps specialist-first merit selection across both fleets
+- `MVP`
+  - reads both `api_mvp` and `api_mvp_combined`
+  - renders a joint fallback commendation when two official MVPs exist and no stronger specialist qualifies
+  - keeps older single-MVP history compatible
+- `report rendering`
+  - lists `第一艦隊` and `第二艦隊` separately in `硬派詳報`
+  - includes all twelve ships in composition and return-state damage assessment
+  - keeps `標準公報` aggregate and toy-first while surfacing the actual named specialist
+- `runtime boundary`
+  - installation and process control remain separate; this patch does not require automatic Poi UI control, reload, or restart
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand src/__tests__/runtime.spec.ts src/__tests__/report.spec.ts
+npm test -- --runInBand
+npm run typeCheck
+npm pack --dry-run
+git diff --check
+```
+
+## 0.4.17
+
+This patch adds a bounded anti-submarine contribution signal and lets the report
+judge AA, ASW, and the visible game MVP together. It remains deterministic and
+without an LLM; it does not reconstruct a full battle or assign submarine sinks.
+
+この patch は bounded な対潜戦果 signal を追加し、防空、対潜、game MVP を一つの
+deterministic な殊勲評議に掛けます。LLM は使わず、full battle reconstruction や
+特定艦への潜水艦撃沈帰属は行いません。
+
+### Changed
+
+- `truth capture`
+  - reads positive friendly ASW hits from aligned opening-ASW and shelling arrays
+  - accepts only targets identified as submarines by ship master data
+  - keeps unmapped combined-fleet attackers anonymous instead of guessing a ship
+- `殊勲評議`
+  - groups AA loss by named actor before assigning credit
+  - lets strong ASW outrank an ordinary MVP
+  - rewards one ship contributing across both AA and ASW before a comparable single-domain candidate
+  - keeps the game MVP as fallback and deterministic tie-break
+- `硬派詳報`
+  - renders exact, summarized, or fragmentary ASW observation according to the report-wide profile
+  - records effective attacks but never claims a named submarine sink
+- `標準公報 / 短報`
+  - may inflate positive ASW evidence into `撃沈破` or `掃蕩` rhetoric
+  - mentions the best named ASW contribution even when another claim owns the headline
+- `runtime boundary`
+  - installation remains separate from Poi process control; no UI takeover, reload, or restart is required
+
+### Validation
+
+Checked with direct Node entrypoints because this desktop runtime did not expose
+an `npm` executable in `PATH`:
+
+```bash
+node node_modules/jest/bin/jest.js --runInBand src/__tests__/runtime.spec.ts
+node node_modules/jest/bin/jest.js --runInBand src/__tests__/report.spec.ts
+node node_modules/typescript/bin/tsc --noEmit
+```
+
+## 0.4.16
+
+This release gives `硬派詳報` a deterministic field-observation layer. The report
+still cannot lie or borrow public propaganda multipliers, but it no longer writes
+like an omniscient database dump. The exact capture remains in the truth layer;
+the document may sound surveyed, field-summarized, or fragmentary.
+
+この release は `硬派詳報` に deterministic な現場観測 layer を加えます。詳報は嘘を
+つかず、public propaganda multiplier も借りませんが、全知の database dump のようにも
+書きません。exact capture は truth layer に残し、文書は判明、概報、断片的の三口径を
+取り得ます。
+
+### Changed
+
+- `硬派詳報`
+  - selects one `surveyed`, `field_summary`, or `fragmentary` observation profile per report and stores that selection in the existing render snapshot
+  - renders enemy aircraft losses as exact, bounded approximate, or coarse truth-bounded counts without public inflation
+  - varies own-damage counts between exact numbers, `若干` / `数隻`, and `多数` according to one coherent report-wide profile
+  - lists four, two, or zero individual enemy ships according to that same profile
+  - varies enemy flagship sinking wording between confirmed and field-assessed forms while preserving the actual sunk-signal requirement and friendly-attribution boundary
+  - treats genuinely unknown damage as pending confirmation instead of no damage
+- `参加兵力 / 旗艦`
+  - named friendly flagships now include their broad formal ship type in report prose
+  - game-specific `高速戦艦` and `航空戦艦` labels normalize to `戦艦` only for the named flagship; fleet composition summaries retain their observed game categories
+  - flagships do not gain class-name prefixes; class wording remains for class-wide technical description or enemy identification
+- `runtime and storage`
+  - no history schema change
+  - no battle-parser expansion
+  - no LLM or network dependency
+
+### Validation
+
+Checked with:
+
+```bash
+npm test -- --runInBand src/__tests__/report.spec.ts
+npm test -- --runInBand
+npm run typeCheck
+npm pack --dry-run
+git diff --check
+```
+
 ## 0.4.15
 
 This release makes `標準公報` behave more like a historical headquarters announcement and newspaper-ready public claim board. It remains deterministic, lightweight, and entirely without an LLM: existing truth signals supply the premise, while the public renderer supplies the audacity.
